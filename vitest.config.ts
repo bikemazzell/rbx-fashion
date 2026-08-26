@@ -15,7 +15,12 @@ export default defineConfig({
         test: {
           name: "browser-chromium",
           include: ["tests/browser/**"],
-          exclude: ["tests/browser/smoke/**", "**/node_modules/**", "**/dist/**"],
+          exclude: [
+            "tests/browser/smoke/**",
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/__screenshots__/**",
+          ],
           browser: {
             enabled: true,
             headless: true,
@@ -28,7 +33,7 @@ export default defineConfig({
         test: {
           name: "browser-smoke",
           include: ["tests/browser/smoke/**"],
-          exclude: ["**/node_modules/**", "**/dist/**"],
+          exclude: ["**/node_modules/**", "**/dist/**", "**/__screenshots__/**"],
           browser: {
             enabled: true,
             headless: true,

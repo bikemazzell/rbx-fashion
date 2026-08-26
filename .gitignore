@@ -7,3 +7,5 @@ test-results/
 .cache/
 *.local
 .DS_Store
+__screenshots__/
+.vitest-attachments/
