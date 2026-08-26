@@ -15,6 +15,7 @@
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser-chromium --project browser-smoke",
     "check:bundle": "node scripts/check-bundle.mjs",
+    "calibration:fixtures": "node --experimental-strip-types scripts/generate-calibration.mjs",
     "test:pwa": "node scripts/test-pwa.mjs",
     "test:e2e": "playwright test",
     "check:release": "node scripts/check-release.mjs"

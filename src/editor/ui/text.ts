@@ -27,6 +27,10 @@ export const OPEN_TOO_BIG_MESSAGE = "That project file is too big to open.";
 
 export const OPEN_INVALID_MESSAGE = "That file can't be opened. It may be damaged or not a clothing project.";
 
+export const PREVIEW_UNAVAILABLE_MESSAGE = "Preview isn't available on this device. You can still edit and export your clothing.";
+
+export const PREVIEW_COMPOSE_FAILED_MESSAGE = "Something went wrong showing the preview. Your clothing is still safe.";
+
 export function composeFailureMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "kind" in error && "message" in error) {
     const failure = error as { kind: unknown; message: unknown };

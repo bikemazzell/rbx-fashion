@@ -259,19 +259,63 @@ button {
   touch-action: none;
 }
 
-.preview-empty {
+.preview-stage {
+  position: relative;
   flex: 1;
+  min-height: 240px;
+  margin: 0.5rem 0.75rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: var(--stage);
+  touch-action: none;
+}
+
+.preview-stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.preview-reset {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.preview-status {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
   color: var(--muted);
-  background: var(--stage);
-  margin: 0.5rem 0.75rem;
-  border-radius: 1rem;
+  pointer-events: none;
 }
 
-.preview-empty p {
+.preview-notice {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 2rem);
   margin: 0;
+  padding: 0.6rem 0.9rem;
+  background: #fef3c7;
+  color: #6b4700;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  text-align: center;
+  pointer-events: none;
 }
 
 .notice-area {

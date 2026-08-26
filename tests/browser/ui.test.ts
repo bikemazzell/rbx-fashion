@@ -5,7 +5,7 @@ import { mountDesignerApp, unmountDesignerApp } from "../../src/editor/ui/mount"
 import { EXPORT_DISCLAIMER, TRANSPARENT_WARNING } from "../../src/project/export";
 import { IMPORT_UNSUPPORTED_MESSAGE } from "../../src/editor/import";
 import { PATTERN_TOO_SMALL_MESSAGE } from "../../src/compositor/compose";
-import { ITEM_CAP_MESSAGE } from "../../src/editor/ui/text";
+import { ITEM_CAP_MESSAGE, PREVIEW_UNAVAILABLE_MESSAGE } from "../../src/editor/ui/text";
 import "../../src/styles.css";
 
 let hosts: HTMLElement[] = [];
@@ -543,17 +543,84 @@ test("unsupported imports show the child message and change nothing", async () =
   expect(itemRows(host)).toHaveLength(0);
 });
 
-test("preview tab shows the coming soon placeholder", async () => {
+test("preview tab mounts the lazy 3D preview or reports it unavailable", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
   const previewPane = requireEl(host.querySelector<HTMLElement>(".pane-preview"), "preview pane");
-  expect(previewPane.offsetParent).toBeNull();
   toolbarButton(host, "Preview").click();
-  await waitFor(() => previewPane.offsetParent !== null, "preview pane visible");
-  expect(previewPane.textContent).toContain("Preview is coming soon");
-  const editTab = requireEl(host.querySelector(".tabbar button"), "edit tab");
-  expect(editTab.getAttribute("aria-pressed")).toBe("false");
-});
+  await waitFor(
+    () =>
+      previewPane.querySelector("canvas") !== null ||
+      (previewPane.querySelector('[role="status"]')?.textContent ?? "").includes(PREVIEW_UNAVAILABLE_MESSAGE),
+    "preview canvas or unavailable message",
+    8000,
+  );
+  const probe = document.createElement("canvas");
+  const gl = probe.getContext("webgl2") ?? probe.getContext("webgl");
+  if (gl !== null) {
+    expect(previewPane.querySelector("canvas"), "chromium with WebGL must mount the canvas").not.toBeNull();
+  }
+}, 12000);
+
+test("preview Reset button is labeled, sized, and keeps working", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  toolbarButton(host, "Preview").click();
+  const previewPane = requireEl(host.querySelector<HTMLElement>(".pane-preview"), "preview pane");
+  await waitFor(() => previewPane.querySelector("canvas") !== null, "preview canvas", 8000);
+  const reset = requireEl(previewPane.querySelector('[aria-label="Reset view"]'), "reset button");
+  const rect = reset.getBoundingClientRect();
+  expect(rect.width).toBeGreaterThanOrEqual(44);
+  expect(rect.height).toBeGreaterThanOrEqual(44);
+  expect((reset.textContent ?? "").trim()).toBe("Reset");
+  expect(previewPane.querySelectorAll("button").length).toBe(1);
+  (reset as HTMLButtonElement).click();
+  await waitFor(() => previewPane.querySelector("canvas") !== null, "canvas survives reset");
+}, 12000);
+
+test("switching garments after visiting Preview keeps editing, undo, and export working", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  toolbarButton(host, "Preview").click();
+  const previewPane = requireEl(host.querySelector<HTMLElement>(".pane-preview"), "preview pane");
+  await waitFor(() => previewPane.querySelector("canvas") !== null, "preview canvas", 8000);
+  await addColor(host, 0);
+  expect((byLabel(host, "Undo") as HTMLButtonElement).disabled).toBe(false);
+  (byLabel(host, "New") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Start a new project?"]') !== null,
+    "unsaved dialog",
+  );
+  byText(host, "Start New").click();
+  await waitFor(
+    () => host.querySelector("h1")?.textContent === "Roblox Clothing Designer",
+    "start screen",
+  );
+  (byLabel(host, "Pants") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector(".project-name")?.textContent === "My Pants",
+    "pants editor",
+  );
+  expect((byLabel(host, "Undo") as HTMLButtonElement).disabled).toBe(true);
+  await addColor(host, 1);
+  expect((byLabel(host, "Undo") as HTMLButtonElement).disabled).toBe(false);
+  const stub = stubDownloads();
+  try {
+    toolbarButton(host, "Export").click();
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Download ready"]') !== null,
+      "disclaimer",
+    );
+    expect(stub.downloads).toEqual(["My Pants.png"]);
+    (byLabel(host, "Okay") as HTMLButtonElement).click();
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Download ready"]') === null,
+      "disclaimer closes",
+    );
+  } finally {
+    stub.restore();
+  }
+}, 20000);
 
 function stubDownloads(): { downloads: string[]; restore: () => void } {
   const downloads: string[] = [];

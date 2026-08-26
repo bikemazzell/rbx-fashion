@@ -13,6 +13,7 @@ import {
   IconUndo,
 } from "./icons";
 import { ItemsPanel } from "./items-panel";
+import { PreviewPane } from "./preview-pane";
 import {
   AddSheet,
   ColorSheet,
@@ -194,9 +195,12 @@ export function EditorScreen(props: EditorScreenProps) {
             />
           </section>
           <section class="pane pane-preview" aria-label="Preview">
-            <div class="preview-empty">
-              <p>Preview is coming soon</p>
-            </div>
+            <PreviewPane
+              garment={doc.garmentType}
+              document={doc}
+              assets={props.assets}
+              active={props.desktop || props.activeTab === "preview"}
+            />
           </section>
         </div>
         {props.desktop && (
