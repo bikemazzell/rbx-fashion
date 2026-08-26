@@ -43,6 +43,7 @@ export interface EditorScreenProps {
   desktop: boolean;
   sheet: SheetKind;
   pendingStartOpen: boolean;
+  unsavedVariant: "new" | "open";
   notice: string | null;
   composeError: string | null;
   transparentWarning: string | null;
@@ -51,6 +52,8 @@ export interface EditorScreenProps {
   undoDisabled: boolean;
   redoDisabled: boolean;
   onNew: () => void;
+  onSave: () => void;
+  onOpen: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onTabChange: (tab: TabKind) => void;
@@ -109,6 +112,12 @@ export function EditorScreen(props: EditorScreenProps) {
       <header class="app-header">
         <button type="button" class="header-button" aria-label="New" onClick={props.onNew}>
           New
+        </button>
+        <button type="button" class="header-button" aria-label="Save" onClick={props.onSave}>
+          Save
+        </button>
+        <button type="button" class="header-button" aria-label="Open" onClick={props.onOpen}>
+          Open
         </button>
         <h1 class="project-name">{doc.name}</h1>
         <button
@@ -286,6 +295,10 @@ export function EditorScreen(props: EditorScreenProps) {
       {props.sheet === "disclaimer" && <DisclaimerSheet onClose={props.onCloseSheet} />}
       {props.pendingStartOpen && (
         <UnsavedDialog
+          title={
+            props.unsavedVariant === "open" ? "Open a different project?" : "Start a new project?"
+          }
+          confirmLabel={props.unsavedVariant === "open" ? "Open" : "Start New"}
           onKeepEditing={props.onCancelPendingStart}
           onStartNew={props.onConfirmPendingStart}
         />

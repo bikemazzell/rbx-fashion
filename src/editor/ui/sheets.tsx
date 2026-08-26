@@ -120,9 +120,13 @@ export function DisclaimerSheet({ onClose }: { onClose: () => void }) {
 }
 
 export function UnsavedDialog({
+  title,
+  confirmLabel,
   onKeepEditing,
   onStartNew,
 }: {
+  title: string;
+  confirmLabel: string;
   onKeepEditing: () => void;
   onStartNew: () => void;
 }) {
@@ -132,14 +136,14 @@ export function UnsavedDialog({
   }, []);
   return (
     <div class="dialog-backdrop">
-      <div class="dialog" role="dialog" aria-modal="true" aria-label="Start a new project?">
-        <p class="dialog-text">Start a new project? Your changes will be lost.</p>
+      <div class="dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <p class="dialog-text">{title} Your changes will be lost.</p>
         <div class="dialog-actions">
           <button type="button" ref={keepRef} onClick={onKeepEditing}>
             Keep Editing
           </button>
           <button type="button" class="primary" onClick={onStartNew}>
-            Start New
+            {confirmLabel}
           </button>
         </div>
       </div>

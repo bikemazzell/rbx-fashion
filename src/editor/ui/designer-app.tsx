@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { JSX } from "preact";
 import { AssetStore } from "../../assets/store";
 import { defaultTransform } from "../../compositor/math";
 import { getTemplate } from "../../domain/registry";
@@ -9,13 +10,19 @@ import type {
   TemplateRegistryEntry,
   Transform,
 } from "../../domain/types";
+import { openProject, saveProject } from "../../project/archive";
 import { downloadBlob, exportRobloxPng, TRANSPARENT_WARNING } from "../../project/export";
 import { importImage } from "../import";
-import { createSession, dispatch } from "../state";
+import { createSession, createSessionFromDocument, dispatch } from "../state";
 import type { EditorAction, EditorSession, ItemSpec, TransformPatch } from "../state";
 import { EditorScreen } from "./editor-screen";
 import { StartScreen } from "./start-screen";
-import { ITEM_CAP_MESSAGE, composeFailureMessage } from "./text";
+import {
+  EXPORT_FAILED_MESSAGE,
+  ITEM_CAP_MESSAGE,
+  OPEN_INVALID_MESSAGE,
+  composeFailureMessage,
+} from "./text";
 
 type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer";
 
@@ -28,7 +35,8 @@ interface PendingRaster {
 
 type PendingStart =
   | { go: "start-screen" }
-  | { go: "new-project"; garment: GarmentType; item: ItemSpec | null; megapixels: number };
+  | { go: "new-project"; garment: GarmentType; item: ItemSpec | null; megapixels: number }
+  | { go: "open-file" };
 
 function placementTransform(
   placement: PlacementMode,
@@ -81,6 +89,8 @@ export function DesignerApp() {
   const sessionRef = useRef<EditorSession | null>(session);
   sessionRef.current = session;
   const exportInFlightRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const openFileInputRef = useRef<HTMLInputElement>(null);
   const undoRef = useRef<HTMLButtonElement>(null);
   const redoRef = useRef<HTMLButtonElement>(null);
 
@@ -106,6 +116,19 @@ export function DesignerApp() {
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
   }, []);
+
+  const sessionDirty = session !== null && session.dirty;
+  useEffect(() => {
+    if (!sessionDirty) {
+      return;
+    }
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [sessionDirty]);
 
   const selectedLayer = useMemo(() => {
     if (session === null) {
@@ -234,6 +257,11 @@ export function DesignerApp() {
       goStartScreen();
       return;
     }
+    if (pending.go === "open-file") {
+      setPendingStart(null);
+      openFileInputRef.current?.click();
+      return;
+    }
     runNewProject(pending.garment, pending.item, pending.megapixels);
   };
 
@@ -341,6 +369,86 @@ export function DesignerApp() {
     } finally {
       exportInFlightRef.current = false;
     }
+  };
+
+  const onSave = async () => {
+    if (saveInFlightRef.current) {
+      return;
+    }
+    const current = sessionRef.current;
+    if (current === null) {
+      return;
+    }
+    saveInFlightRef.current = true;
+    try {
+      const result = await saveProject(current.document, (id) => {
+        const asset = assets.get(id);
+        if (asset === undefined) {
+          throw new Error(`missing asset ${id}`);
+        }
+        return asset.bytes;
+      });
+      if (sessionRef.current !== current) {
+        return;
+      }
+      if (result.ok) {
+        downloadBlob(`${current.document.name}.rbxcloth.zip`, result.blob);
+        commitIfChanged(current, dispatch(current, { type: "mark-saved" }));
+      } else {
+        setNotice(result.message);
+      }
+    } catch {
+      setNotice(EXPORT_FAILED_MESSAGE);
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  };
+
+  const requestOpen = () => {
+    const current = sessionRef.current;
+    if (current === null) {
+      return;
+    }
+    if (current.dirty) {
+      setPendingStart({ go: "open-file" });
+      return;
+    }
+    openFileInputRef.current?.click();
+  };
+
+  const onOpenFile = async (event: JSX.TargetedEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file === undefined) {
+      return;
+    }
+    const captured = sessionRef.current;
+    if (captured === null) {
+      return;
+    }
+    const result = await openProject(file);
+    if (sessionRef.current !== captured) {
+      return;
+    }
+    if (!result.ok) {
+      setNotice(result.message);
+      return;
+    }
+    const next = createSessionFromDocument(result.document);
+    if (next === null) {
+      setNotice(OPEN_INVALID_MESSAGE);
+      return;
+    }
+    for (const asset of result.assets) {
+      assets.add(asset);
+    }
+    commitSession(next);
+    setSelectedItemId(topLayerId(next));
+    setImportedMegapixels(
+      result.assets.reduce((sum, asset) => sum + (asset.width * asset.height) / 1_000_000, 0),
+    );
+    resetTransient();
   };
 
   const onPlacement = (placement: PlacementMode) => {
@@ -456,51 +564,63 @@ export function DesignerApp() {
   }
 
   return (
-    <EditorScreen
-      session={session}
-      assets={assets}
-      selectedLayer={selectedLayer}
-      layersTopFirst={layersTopFirst}
-      activeTab={activeTab}
-      desktop={desktop}
-      sheet={sheet}
-      pendingStartOpen={pendingStart !== null}
-      notice={notice}
-      composeError={composeError}
-      transparentWarning={transparentWarning}
-      undoRef={undoRef}
-      redoRef={redoRef}
-      undoDisabled={undoDisabled}
-      redoDisabled={redoDisabled}
-      onNew={onNew}
-      onUndo={() => apply({ type: "undo" })}
-      onRedo={() => apply({ type: "redo" })}
-      onTabChange={setActiveTab}
-      onToolbar={onToolbar}
-      onPlacement={onPlacement}
-      onComposeError={handleComposeError}
-      getSession={() => session}
-      dispatch={apply}
-      onSelect={setSelectedItemId}
-      onRename={onRename}
-      onToggleVisibility={onToggleVisibility}
-      onDuplicate={onDuplicate}
-      onReorder={onReorder}
-      onDelete={onDelete}
-      onTransformCommit={onTransformCommit}
-      onOpacityCommit={onOpacityCommit}
-      onFile={handleFile}
-      onSwatch={onSwatch}
-      onAnswerGarment={answerGarment}
-      onCancelQuestion={() => {
-        setPendingRaster(null);
-        setSheet(null);
-      }}
-      onCloseSheet={() => setSheet(null)}
-      onOpenItems={() => setSheet("items")}
-      onOpenMore={() => setSheet("more")}
-      onConfirmPendingStart={confirmPendingStart}
-      onCancelPendingStart={() => setPendingStart(null)}
-    />
+    <>
+      <EditorScreen
+        session={session}
+        assets={assets}
+        selectedLayer={selectedLayer}
+        layersTopFirst={layersTopFirst}
+        activeTab={activeTab}
+        desktop={desktop}
+        sheet={sheet}
+        pendingStartOpen={pendingStart !== null}
+        unsavedVariant={pendingStart !== null && pendingStart.go === "open-file" ? "open" : "new"}
+        notice={notice}
+        composeError={composeError}
+        transparentWarning={transparentWarning}
+        undoRef={undoRef}
+        redoRef={redoRef}
+        undoDisabled={undoDisabled}
+        redoDisabled={redoDisabled}
+        onNew={onNew}
+        onSave={() => void onSave()}
+        onOpen={requestOpen}
+        onUndo={() => apply({ type: "undo" })}
+        onRedo={() => apply({ type: "redo" })}
+        onTabChange={setActiveTab}
+        onToolbar={onToolbar}
+        onPlacement={onPlacement}
+        onComposeError={handleComposeError}
+        getSession={() => session}
+        dispatch={apply}
+        onSelect={setSelectedItemId}
+        onRename={onRename}
+        onToggleVisibility={onToggleVisibility}
+        onDuplicate={onDuplicate}
+        onReorder={onReorder}
+        onDelete={onDelete}
+        onTransformCommit={onTransformCommit}
+        onOpacityCommit={onOpacityCommit}
+        onFile={handleFile}
+        onSwatch={onSwatch}
+        onAnswerGarment={answerGarment}
+        onCancelQuestion={() => {
+          setPendingRaster(null);
+          setSheet(null);
+        }}
+        onCloseSheet={() => setSheet(null)}
+        onOpenItems={() => setSheet("items")}
+        onOpenMore={() => setSheet("more")}
+        onConfirmPendingStart={confirmPendingStart}
+        onCancelPendingStart={() => setPendingStart(null)}
+      />
+      <input
+        ref={openFileInputRef}
+        type="file"
+        accept=".rbxcloth.zip,.zip,application/zip"
+        hidden
+        onChange={onOpenFile}
+      />
+    </>
   );
 }

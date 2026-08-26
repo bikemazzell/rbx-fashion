@@ -19,6 +19,14 @@ export const ITEM_CAP_MESSAGE = `You already have ${LIMITS.MAX_LAYERS} items. De
 
 export const EXPORT_FAILED_MESSAGE = "Something went wrong. Try again.";
 
+export const SAVE_TOO_BIG_MESSAGE = "This project is too big to save. Delete some pictures and try again.";
+
+export const SAVE_INVALID_MESSAGE = "Something went wrong saving this project. Try again.";
+
+export const OPEN_TOO_BIG_MESSAGE = "That project file is too big to open.";
+
+export const OPEN_INVALID_MESSAGE = "That file can't be opened. It may be damaged or not a clothing project.";
+
 export function composeFailureMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "kind" in error && "message" in error) {
     const failure = error as { kind: unknown; message: unknown };

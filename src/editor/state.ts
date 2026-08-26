@@ -94,6 +94,153 @@ export function createSession(garment: GarmentType, name?: string): EditorSessio
   };
 }
 
+const PLACEMENT_MODES: ReadonlySet<string> = new Set(["decal", "pattern", "full-map"]);
+const SOURCE_MIME_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ASSET_SOURCES: ReadonlySet<string> = new Set(["imported", "generated"]);
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isIntegerInRange(value: unknown, min: number, max: number): boolean {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isName(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length >= 1 && value.trim().length <= 40;
+}
+
+function isValidTransformShape(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.crop)) {
+    return false;
+  }
+  return (
+    isFiniteNumber(value.positionX) &&
+    isFiniteNumber(value.positionY) &&
+    isFiniteNumber(value.rotationDeg) &&
+    isFiniteNumber(value.scaleX) &&
+    isFiniteNumber(value.scaleY) &&
+    value.scaleX > 0 &&
+    value.scaleY > 0 &&
+    isFiniteNumber(value.crop.x) &&
+    isFiniteNumber(value.crop.y) &&
+    isFiniteNumber(value.crop.width) &&
+    isFiniteNumber(value.crop.height) &&
+    isCropValid(value.crop as Transform["crop"])
+  );
+}
+
+function isValidLayerShape(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value.id !== "string" || value.id.length === 0 || !isName(value.name)) {
+    return false;
+  }
+  if (value.kind !== "solid" && value.kind !== "raster") {
+    return false;
+  }
+  if (
+    typeof value.visible !== "boolean" ||
+    !isFiniteNumber(value.opacity) ||
+    value.opacity < 0 ||
+    value.opacity > 1 ||
+    typeof value.placement !== "string" ||
+    !PLACEMENT_MODES.has(value.placement) ||
+    !isValidTransformShape(value.transform)
+  ) {
+    return false;
+  }
+  if (value.kind === "raster") {
+    return typeof value.assetId === "string" && value.assetId.length > 0;
+  }
+  return typeof value.color === "string" && value.color.length > 0;
+}
+
+function isValidManifestEntryShape(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value.id !== "string" || value.id.length === 0) {
+    return false;
+  }
+  if (value.path !== `assets/${value.id}.png`) {
+    return false;
+  }
+  if (
+    typeof value.originalName !== "string" ||
+    typeof value.sourceMimeType !== "string" ||
+    !SOURCE_MIME_TYPES.has(value.sourceMimeType) ||
+    typeof value.source !== "string" ||
+    !ASSET_SOURCES.has(value.source)
+  ) {
+    return false;
+  }
+  if (
+    !isIntegerInRange(value.byteLength, 1, Number.MAX_SAFE_INTEGER) ||
+    !isIntegerInRange(value.width, 1, LIMITS.IMPORT_MAX_DIM) ||
+    !isIntegerInRange(value.height, 1, LIMITS.IMPORT_MAX_DIM)
+  ) {
+    return false;
+  }
+  if (typeof value.sha256 !== "string" || !SHA256_HEX.test(value.sha256)) {
+    return false;
+  }
+  return value.prompt === undefined || typeof value.prompt === "string";
+}
+
+export function isValidProjectDocument(value: unknown): boolean {
+  if (!isRecord(value) || !isName(value.name)) {
+    return false;
+  }
+  if (!Array.isArray(value.layers) || !Array.isArray(value.assets)) {
+    return false;
+  }
+  const layerIds = new Set<string>();
+  for (const layer of value.layers) {
+    if (!isValidLayerShape(layer) || !isRecord(layer)) {
+      return false;
+    }
+    const id = layer.id as string;
+    if (layerIds.has(id)) {
+      return false;
+    }
+    layerIds.add(id);
+  }
+  const assetIds = new Set<string>();
+  for (const entry of value.assets) {
+    if (!isValidManifestEntryShape(entry) || !isRecord(entry)) {
+      return false;
+    }
+    const id = entry.id as string;
+    if (assetIds.has(id)) {
+      return false;
+    }
+    assetIds.add(id);
+  }
+  return true;
+}
+
+export function createSessionFromDocument(document: ProjectDocumentV1): EditorSession | null {
+  if (!isValidProjectDocument(document)) {
+    return null;
+  }
+  const counters: LayerCounters = { raster: 0, solid: 0 };
+  for (const layer of document.layers) {
+    if (layer.kind === "raster") {
+      counters.raster += 1;
+    } else {
+      counters.solid += 1;
+    }
+  }
+  return { document, undo: [], redo: [], pending: null, dirty: false, counters };
+}
+
 export function dispatch(
   session: EditorSession,
   action: EditorAction,
