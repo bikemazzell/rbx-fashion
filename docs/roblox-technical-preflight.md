@@ -1,6 +1,6 @@
 # Roblox Classic Clothing Technical Preflight
 
-Status: ready for implementation planning, with Roblox Studio calibration retained as a release gate.
+Status: ready for the lean MVP, with R6 Roblox Studio calibration retained as a release gate. R15 preview work is deferred.
 
 Evidence checked: 2026-08-25
 
@@ -11,12 +11,11 @@ Roblox's current documentation and downloadable assets are sufficient to lock:
 - The three MVP garment types and their output dimensions.
 - The exact editable rectangles in the official 585x559 shirt and pants atlases.
 - A deterministic coordinate and transform model for the 2D compositor.
-- The current blocky R15 reference geometry from which to author a lightweight procedural preview.
-- A reproducible Roblox Studio calibration procedure for preview UVs.
+- A reproducible Roblox Studio calibration procedure for one procedural R6 preview.
 
-They are not sufficient to claim an exact R15 classic-clothing preview without a Studio comparison. Roblox publishes body/reference meshes with body-texture UVs, but does not publish the engine's complete classic `ShirtTemplate`/`PantsTemplate` projection as a machine-readable mapping. The implementation may proceed, but R6 and R15 preview bindings remain unverified compatibility data until the calibration gate in this document passes.
+Roblox does not publish its complete classic `ShirtTemplate`/`PantsTemplate` projection as a machine-readable mapping. The implementation may proceed, but the MVP R6 preview bindings remain unverified compatibility data until the calibration gate in this document passes. The R15 reference research below is retained for a later preview milestone and is not an MVP implementation requirement.
 
-This is a narrower issue than 3D geometry editing. The MVP still uses static preview geometry only; mesh, rig, cage, and geometry editing remain deferred.
+This is a narrower issue than 3D geometry editing. The MVP uses one static R6 preview only; R15 preview, mesh, rig, cage, and geometry editing remain deferred.
 
 ## Authoritative sources and pinned assets
 
@@ -53,7 +52,7 @@ The product repository should store this provenance next to the authored registr
 
 Roblox describes 512x512 as an example square T-shirt size rather than an exclusive format statement. This editor deliberately standardizes T-shirt projects and exports at 512x512 for one simple, testable MVP format.
 
-The T-shirt canvas uses the same top-left, Y-down pixel-edge convention as the larger atlas. It has one logical target, `torso-graphic`, covering `0,0,512,512`. In 3D it is a front-torso graphic rather than six-face wrapping clothing, and its exact R6/R15 placement is part of Studio calibration.
+The T-shirt canvas uses the same top-left, Y-down pixel-edge convention as the larger atlas. It has one logical target, `torso-graphic`, covering `0,0,512,512`. In 3D it is a front-torso graphic rather than six-face wrapping clothing, and its exact R6 placement is part of MVP Studio calibration. R15 placement is deferred.
 
 ## Canonical atlas coordinates
 
@@ -172,15 +171,19 @@ Rules:
 
 The transform fields have these mode-specific anchors:
 
-- `decal`: `positionX/Y` is the crop center in output-canvas/atlas coordinates. Default scale is 1 and default position is the bounding-box center of the targeted `atlasRect` union; for `targetPanels: "all"`, use the union of every logical target. The transformed image is drawn once.
+- `decal`: `positionX/Y` is the crop center in output-canvas/atlas coordinates. Default scale is 1 and default position is the bounding-box center of every logical target's `atlasRect` union. The transformed image is drawn once and automatically clipped to the garment.
 - `full-map`: same output-canvas coordinate semantics as decal, with default position at canvas center. A full-crop canonical-size source defaults to scale 1; any other source defaults to `scaleX = canvasWidth / cw` and `scaleY = canvasHeight / ch`, using the cropped source-pixel dimensions defined above. It always renders to the complete canonical canvas, so importing and re-exporting a flattened Roblox map preserves artwork outside named rectangles. Changing its transform is allowed.
 - `pattern`: `positionX/Y` is the repeating tile's center/phase in component garment coordinates. Defaults are `cw / 2` and `ch / 2`, which align the first tile's top-left with each component origin at scale 1. The same base transform is evaluated separately for torso, right limb, and left limb, so the pattern remains continuous across adjacent faces inside each unfolded component. Separate components intentionally share transform values but not a continuous physical seam. For each panel, render source tiles into garment space, compose with the inverse of that panel's `atlasToGarment` matrix to return to atlas space, and clip to `atlasRect`.
 
 Defaults are written into the document when a layer or placement mode is created. They are never recomputed because selection or target bounds later change.
 
-For pattern layers, `repeat` repeats the transformed tile on both local axes, `mirror` alternates reflection on both axes, and `off` draws one tile in garment space. Decal and full-map layers require `tileMode: "off"`. Implement pattern repetition with explicitly enumerated transformed draws at canonical resolution; do not depend on browser-specific `CanvasPattern.setTransform()` behavior for document semantics.
+For MVP pattern layers, `repeat` repeats the transformed tile on both local axes. Decal and full-map layers do not repeat. Implement repetition with explicitly enumerated transformed draws at canonical resolution; do not depend on browser-specific `CanvasPattern.setTransform()` behavior for document semantics. Mirror repeat is deferred.
 
-### Targeting, overrides, and precedence
+MVP always targets every logical garment panel and has no targeting or override fields in its project schema. Final compositing order is: validate source and crop; evaluate placement/repetition; clip automatically to the garment; apply layer opacity; composite in layer order with source-over blending. Hidden layers are skipped.
+
+### DEFERRED: targeting and overrides — MVP DOES NOT IMPLEMENT
+
+The following rules are retained for a possible advanced editor and are not MVP implementation requirements:
 
 - `targetPanels: "all"` means the union of named panels for decal and pattern layers. T-shirts have the single logical `torso-graphic` target.
 - A panel list on a decal or pattern layer clips drawing to the union of its target rectangles: `atlasRect` for shirt/pants panels and the full target rectangle for T-shirts.
@@ -194,9 +197,9 @@ For pattern layers, `repeat` repeats the transformed tile on both local axes, `m
 
 These definitions should replace ambiguous `x`/`y` comments in implementation types with the field names `positionX` and `positionY`.
 
-## Registry interfaces
+## Registry interface reference
 
-The implementation registry should be explicit data, validated on startup and in tests:
+The registry should be explicit data, validated on startup and in tests. The interface below is a compatibility superset retained for later R15 work. MVP implements only the R6 body parts and R6 preview bindings; the R15 body-part variants and bindings must not expand the first-release scope.
 
 ```ts
 type RigType = "R6" | "R15";
@@ -313,7 +316,7 @@ interface AtlasRegistryEntry extends RegistryEntryBase {
 type TemplateRegistryEntry = TShirtRegistryEntry | AtlasRegistryEntry;
 ```
 
-Multiple bindings may use the same source panel: R15 subdivides a classic torso or limb surface across upper/lower parts and hands or feet. Each wrapped binding identifies that panel by `panelId`, names one calibrated body part, and may use a sub-rectangle of the panel. A front-graphic binding identifies `torso-graphic`; T-shirt calibration determines its R6/R15 body parts and surface bounds.
+Deferred R15 bindings may use the same source panel multiple times because R15 subdivides a classic torso or limb surface across upper/lower parts and hands or feet. MVP R6 wrapped bindings identify one panel and calibrated R6 body part. A front-graphic binding identifies `torso-graphic`; MVP calibration determines its R6 surface bounds.
 
 Every `sourceRect` is half-open, positive-sized, and contained by its registry entry's canvas. A `wrapped-face` rectangle must also be contained by its `panelId` panel's `atlasRect`, and its `face` must equal that panel's face. Binding keys `(rig, bodyPart, projection, panelId-or-targetId, face)` are unique, while multiple body parts may deliberately consume different sub-rectangles of the same classic panel. A registry with `calibrationVersion: null` is valid for 2D editing but must not enable an “accurate preview” claim.
 
@@ -323,7 +326,7 @@ Each procedural face defines local vertices in bottom-left, bottom-right, top-ri
 
 The `seams` array records edges that are directly continuous in the official unfolded net. Physical cube edges cut apart in the atlas are not falsely labeled continuous; calibration fixtures mark them as cut seams. This contract promises continuity across declared net edges, not across every physical cube edge.
 
-## 3D geometry evidence and scope
+## Deferred R15 evidence and MVP R6 scope
 
 Inspection of Roblox's current FBX downloads establishes:
 
@@ -332,11 +335,13 @@ Inspection of Roblox's current FBX downloads establishes:
 - `Rig_and_Attachments_Template.fbx` supplies the standard R15 armature/attachments but no render body geometry suitable for this preview.
 - The render meshes expose a single ordinary UV attribute. Those ranges are arranged for each body's own texture assets and are not coordinates in the 585x559 classic clothing atlas.
 
-For example, the blocky reference contains separate `UpperTorso_Geo`, `LowerTorso_Geo`, upper/lower limb, hand, and foot meshes. Its block surfaces and segment bounds can be reduced to procedural boxes, avoiding an FBX loader and a shipped high-detail model in the web application. This retains the dependency and bundle-size goals. The base and clothing surfaces use coincident procedural geometry; the clothing material uses `polygonOffset: true`, `polygonOffsetFactor: -1`, and `polygonOffsetUnits: -1` to avoid z-fighting without inventing expanded body dimensions. Browser tests must confirm that this remains stable on the supported WebGL implementations.
+The R15 FBX findings are retained only to support a later R15 preview. MVP does not load, parse, ship, or derive runtime geometry from these files.
 
-R6 preview geometry should likewise be procedural boxes. The template face proportions suggest a 64-pixel-per-stud relationship for a conventional block rig, but this is an implementation inference, not a published Roblox requirement. None of the pinned FBX files is an R6 render rig. Exact R6 part sizes come only from the Studio-generated Block Avatar R6 measurement, and all R15 face subdivisions must likewise be recorded during calibration rather than asserted from convention.
+The MVP R6 base and clothing surfaces use coincident procedural geometry; the clothing material uses `polygonOffset: true`, `polygonOffsetFactor: -1`, and `polygonOffsetUnits: -1` to avoid z-fighting without inventing expanded body dimensions. Browser tests must confirm that this remains stable on the supported WebGL implementations.
 
-## Required Roblox Studio calibration
+R6 preview geometry uses procedural boxes. The template face proportions suggest a 64-pixel-per-stud relationship for a conventional block rig, but this is an implementation inference, not a published Roblox requirement. None of the pinned FBX files is an R6 render rig. Exact MVP part sizes come only from the Studio-generated Block Avatar R6 measurement. R15 face subdivisions require a separate future calibration rather than convention.
+
+## Required MVP R6 Roblox Studio calibration
 
 Calibration is compatibility testing, not a runtime dependency. It must be completed before the preview is called accurate and before release. It requires a reviewer with the current Roblox Studio, a Roblox account, and permission to upload private test images; none of those capabilities is part of the product itself.
 
@@ -356,12 +361,12 @@ The fixture generator must read the registry but the expected checklist must be 
 
 ### Procedure
 
-1. In the current production Roblox Studio, use Avatar > Character to insert Block Avatar R6 and R15 rigs.
-2. Rename them `CalibrationR6` and `CalibrationR15`; do not substitute marketplace avatar packages.
-3. Record the Studio version and each rig's `Humanoid.RigType`.
+1. In the current production Roblox Studio, use Avatar > Character to insert one Block Avatar R6 rig.
+2. Rename it `CalibrationR6`; do not substitute a marketplace avatar package.
+3. Record the Studio version and the rig's `Humanoid.RigType`.
 4. Run the read-only Command Bar script below to capture every `BasePart` size and transform relative to `HumanoidRootPart`.
-5. Upload the calibration PNGs privately for testing, add the matching `ShirtGraphic`, `Shirt`, or `Pants` object to each rig, and assign its image property as Roblox documents.
-6. Capture front, back, left, right, top, and bottom views for all three garments on both rigs.
+5. Upload the calibration PNGs privately for testing, add the matching `ShirtGraphic`, `Shirt`, or `Pants` object to the rig, and assign its image property as Roblox documents.
+6. Capture front, back, left, right, top, and bottom views for all three garments on the R6 rig.
 7. Capture the same views in the web preview.
 8. For every visible face, verify panel ID, arrow direction, four edge numbers, segment boundary, and seam partner. Record pass/fail; screenshots alone are not the checklist.
 9. Correct the authored `PreviewFaceBinding` records and repeat until every check passes.
@@ -373,7 +378,7 @@ Read-only Studio Command Bar measurement script:
 local HttpService = game:GetService("HttpService")
 
 local output = {}
-for _, rigName in ipairs({ "CalibrationR6", "CalibrationR15" }) do
+for _, rigName in ipairs({ "CalibrationR6" }) do
     local rig = workspace:FindFirstChild(rigName)
     assert(rig and rig:IsA("Model"), "Missing " .. rigName)
     local root = rig:FindFirstChild("HumanoidRootPart")
@@ -402,7 +407,7 @@ end
 print(HttpService:JSONEncode(output))
 ```
 
-If Roblox Studio changes the generated rigs, the official template hashes change, or a supported browser changes the rendered face result, invalidate the calibration and repeat it.
+If Roblox Studio changes the generated R6 rig, the official template hashes change, or a supported browser changes the rendered face result, invalidate the calibration and repeat it. R15 must use a separate future calibration record.
 
 ## Implementation-plan consequences
 
@@ -410,9 +415,9 @@ A proper implementation plan can now be written without inventing product behavi
 
 1. Encodes and tests the exact atlas rectangles, affine transforms, continuous seams, and registry variants above.
 2. Generates the independent calibration fixtures and checklist.
-3. Authors procedural R6/R15 geometry from the official references and Studio measurements.
-4. Completes the Studio calibration before treating preview UV tests as golden.
+3. Authors procedural R6 geometry from the Studio measurements.
+4. Completes the R6 Studio calibration before treating preview UV tests as golden.
 
-Work on the document reducer, image ingestion, ZIP format, and most of the 2D compositor can proceed in parallel with that manual compatibility gate. Panel-aware pattern output can use the locked atlas and garment-space data immediately. The final 3D UV bindings and any acceptance claim of preview accuracy cannot.
+Work on the document reducer, image normalization, ZIP format, and 2D compositor can proceed in parallel with that manual compatibility gate. Automatic panel-aware pattern output can use the locked atlas and garment-space data immediately. The final R6 UV bindings and any acceptance claim of preview accuracy cannot.
 
 The product introduces no Roblox login, upload, marketplace publishing, or 3D geometry modification. The separate manual release-calibration procedure does require private test-image uploads by an authorized reviewer.

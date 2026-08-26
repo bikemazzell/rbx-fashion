@@ -2,97 +2,127 @@
 
 ## Summary
 
-Build a mobile-first, installable PWA for first-time Roblox creators. It edits classic 2D clothing and previews results on static 3D R6/R15 block avatars.
+Build a small, mobile-first website that lets an 8–10-year-old create Roblox classic clothing without understanding Roblox texture atlases or professional design software.
 
-The official-asset measurements, exact atlas registry, transform semantics, and Roblox Studio calibration boundary are defined in [Roblox Classic Clothing Technical Preflight](./roblox-technical-preflight.md). That document is normative where this overview is less specific.
+The child-facing workflow is:
 
-The MVP supports:
+1. Pick T-shirt, Shirt, or Pants.
+2. Add a picture, choose a color, or—when a parent has enabled it—generate a simple AI pattern.
+3. Choose Sticker, Repeat, or Fill Clothing.
+4. Drag, resize, rotate, crop, and adjust the result while seeing it on the 2D template.
+5. Check it on one simple block-avatar preview and download a Roblox-ready PNG.
 
-- Classic T-shirts: 512x512 PNG.
-- Classic shirts and pants: 585x559 PNG using Roblox's official template layout.
-- Imported PNG, JPEG, and WebP artwork.
-- Solid colors and Gemini-generated seamless patterns.
-- Editable local project ZIPs.
-- Validated local PNG export.
-- GitHub Pages deployment and offline use after the first successful load.
+Projects can also be saved to and reopened from a local `.rbxcloth.zip` file. The site has no accounts, analytics, cloud project storage, Roblox login, or Roblox upload. All non-AI editing works locally and offline after the first successful load.
 
-It excludes accounts, analytics, cloud project storage, Roblox authentication/upload, painting/text tools, animation, arbitrary avatar packages, and any 3D mesh, rig, cage, or geometry editing. Layered 3D clothing requires a fundamentally different mesh/armature/cage pipeline and remains post-MVP. See [Roblox classic clothing](https://create.roblox.com/docs/avatar/classic-clothing) and [layered-accessory requirements](https://create.roblox.com/docs/avatar/layered-accessories/specifications).
+The [Roblox Classic Clothing Technical Preflight](./roblox-technical-preflight.md) remains normative for official output dimensions, atlas rectangles, transform semantics, and the R6 Studio calibration boundary. Atlas panels and UV details are implementation data; they are not exposed in the MVP interface.
 
-## Product and Interaction Design
+## Lean MVP
 
-### Project workflow
+### Garments and inputs
 
-1. Start with New T-shirt, New Shirt, New Pants, Open Project ZIP, or Import Roblox PNG.
-2. Add artwork through drag-and-drop, mobile file picker, solid color, or AI generation.
-3. Choose imported artwork behavior:
-   - Decal/snippet: single positioned image.
-   - Pattern: repeated or mirror-repeated fill.
-   - Full map: flattened image covering the canonical canvas.
-4. Transform artwork with X/Y position, rotation, linked or independent X/Y scale, rectangular crop, opacity, and panel targeting.
-5. Switch between the 2D editor and live 3D preview.
-6. Download a Roblox-ready PNG and, separately, an editable `.rbxcloth.zip` project.
+Support:
 
-A 585x559 flattened import must ask whether it is a shirt or pants because dimensions cannot identify the garment type.
+- Classic T-shirt: 512×512 PNG.
+- Classic Shirt: 585×559 PNG using Roblox's official atlas.
+- Classic Pants: 585×559 PNG using Roblox's official atlas.
+- Imported PNG, JPEG, and WebP images.
+- Existing Roblox texture maps.
+- Solid colors.
+- Optional Gemini-generated seamless patterns.
 
-### Layer editor
+A 512×512 Roblox-map import opens as a T-shirt. A 585×559 import asks whether it is a Shirt or Pants because dimensions cannot distinguish them. Other images are added to the already selected garment.
 
-Layers support:
+Choosing another garment while a project is open always starts a new project behind the existing unsaved-work confirmation. It never converts or silently reinterprets the current Items.
 
-- Raster image or solid color.
+### Child-facing editing model
+
+Use friendly labels while retaining precise internal placement types:
+
+| Child-facing label | Internal placement | Behavior |
+| --- | --- | --- |
+| Sticker | `decal` | Draw the image once and let the child position it. |
+| Repeat | `pattern` | Repeat the image automatically across the garment. |
+| Fill Clothing | `full-map` | Scale the image to fill the complete Roblox map. |
+
+The editor supports at most eight layers. Call them “Items” in the interface. Each item supports:
+
 - Rename, reorder, duplicate, show/hide, and delete.
-- Normal compositing only.
-- Opacity.
-- Off, Repeat, or Mirror Repeat tiling.
-- Whole-garment targeting, selected named panels, and per-panel transform overrides.
-- Fifty in-memory undo/redo states.
+- Move, uniform scale, rotate, and opacity.
+- Crop and independent X/Y scale under a single “More” control.
+- Repeat spacing/scale and phase through the same direct manipulation controls.
+- Normal source-over compositing only.
 
-Template metadata supplies panel masks, orientation, garment-space coordinates, seam adjacency, and 3D UV mapping. Guides remain editor overlays and are never included in exported PNGs.
+Panel selection, face names, seams, UVs, per-panel transforms, and per-panel targeting are never shown. Pattern mapping across the official shirt/pants panels happens automatically inside the compositor.
+
+Fifty in-memory undo/redo states are available. One drag, pinch, rotation, crop, or numeric edit creates one undo step rather than one step per pointer event.
 
 ### Responsive interface
 
-- Mobile portrait: full-screen 2D and 3D tabs, bottom toolbar, and layers/properties in accessible sheets.
-- Mobile landscape: side-by-side 2D/3D panes at 700 CSS pixels or wider; otherwise retain tabs.
-- Desktop: side-by-side canvases with a persistent layers/properties rail.
-- 2D gestures: one-finger selected-layer manipulation; two-finger viewport pan/zoom.
-- 3D gestures: one-finger orbit; pinch zoom.
-- Numeric controls provide precise and keyboard-accessible alternatives.
+- Mobile portrait and coarse-pointer tablets: one full-screen workspace with 2D and Preview tabs, a small bottom toolbar, and Items/More controls in sheets.
+- Mobile landscape at 700 CSS pixels or wider: 2D and preview panes side by side.
+- Desktop with a fine pointer and sufficient width: side-by-side panes with a persistent Items/controls rail.
+- 2D gestures: one finger manipulates the selected item; two fingers pan/zoom the canvas.
+- Preview gestures: one finger rotates the avatar; pinch zooms; Reset returns to the default view.
+- Numeric controls remain available for precision and keyboard accessibility.
 
-The 3D preview provides R6/R15 switching, front/back/left/right presets, orbit, zoom, reset, and background color. It is static and targets standard block avatars only.
+The primary toolbar is limited to Add, Move, Repeat, Color, Preview, and Export. A compact header provides Undo and Redo with disabled states when unavailable. Crop, independent scaling, opacity, item ordering, and project save/open live in secondary sheets rather than the main canvas.
 
-## Technical Design and Interfaces
+### Preview
 
-### Stack and architecture
+MVP provides one fixed, calibrated R6 block-avatar preview. It is a read-only preview of the 2D texture, not a 3D clothing editor.
 
-Use npm, TypeScript, Vite, Preact, native Canvas 2D, Three.js, and `fflate`. No state-management, canvas-editor, 3D framework, router, server framework, or Google SDK is required.
+The preview supports orbit, pinch zoom, and Reset only. It does not expose rig selection, camera presets, background customization, animation, avatar packages, mesh controls, cages, or geometry editing.
 
-Subsystem boundaries:
+If WebGL is unavailable or loses context, show a simple unavailable message. The 2D editor, project save/open, and PNG export must continue to work.
 
-- Document reducer: authoritative project state and undo/redo.
-- Template registry: garment dimensions, masks, panels, seams, and UV definitions.
-- Compositor: canonical-resolution Canvas output with stable document semantics.
-- Interaction controller: pointer gestures and transforms.
-- 3D preview: read-only consumer of the compositor canvas.
-- Archive service: validated ZIP import/export.
-- Export validator: Roblox PNG preflight.
-- Pattern client: optional proxy communication.
-- PWA shell: responsive UI, service worker, and update handling.
+### Optional AI patterns
 
-Three.js uses procedural R6/R15 geometry definitions. A neutral base mannequin and clothing surfaces use coincident geometry; the clothing material uses a fixed negative polygon offset to prevent z-fighting without changing avatar dimensions. The compositor canvas becomes an sRGB `CanvasTexture` with its Y-flip configured explicitly. Rendering is demand-driven, capped at device-pixel-ratio 2, and paused while hidden.
+AI generation is experimental and parent-configured. It is never required to use the editor.
 
-If WebGL initialization or context recovery fails, 3D preview shows a recoverable unavailable state; 2D editing and export remain functional.
+- Hide Generate when no proxy URL is configured.
+- Put Gemini key entry and Forget Key in a clearly labelled Parent Settings sheet.
+- Keep a directly entered key in memory only until reload, tab close, or Forget Key.
+- Once enabled, the child sees a prompt, a few example pattern ideas, Generate, and Cancel—no model or API controls.
+- Generated images enter the editor as ordinary Repeat items and retain their prompt in the local project file.
+- If the proxy, key, network, quota, or provider fails, only Generate is unavailable.
 
-### Template registry provenance and calibration
+The browser calls the configured proxy with:
 
-The template registry is an authored compatibility asset, not data inferred at runtime. Build it from Roblox's official `Classic-Clothing-Templates.zip` and classic-clothing documentation. Record the source URL, retrieval date, and SHA-256 digests of the source ZIP and template PNGs beside the registry. Panel masks use integer output-canvas coordinates transcribed from the official labeled templates; orientation, seam adjacency, garment-space transforms, and preview UV assignments are reviewed separately rather than generated from the registry's own fixtures.
+```http
+POST /api/patterns
+Content-Type: application/json
+X-Gemini-Api-Key: <session-only parent key>
 
-Before release, generate shirt, pants, and T-shirt calibration PNGs in which every applicable face or corner has a unique color, short ID, orientation arrow, and numbered edge. Apply them in Roblox Studio to standard block R6 and R15 rigs. Capture front, back, left, right, top, and bottom views in Studio and in this editor. A reviewer must confirm that every face ID and arrow orientation matches and that each numbered seam connects to its declared partner. Store the calibration images, screenshots, completed checklist, Roblox template hashes, Studio measurements, and verification date together. This calibration gate must pass for both rigs before the 3D preview or panel-targeting workflow is described as accurate.
+{"prompt":"1-500 Unicode characters"}
+```
+
+Success returns one square `image/png`. The portable proxy uses native `fetch`, an exact origin allowlist, a 4 KiB body limit, a 60-second timeout, a 10 MiB response limit, PNG signature/IHDR validation, and normalized redacted errors. It never stores or logs prompts, images, or keys. Keep the upstream Gemini image model configurable and verify it immediately before deployment. A key must never be embedded in the site source or Pages artifact.
+
+## Technical Design
+
+### Stack and boundaries
+
+Use npm, TypeScript, Vite, Preact, native Canvas 2D, Three.js, and `fflate`.
+
+Do not add a router, state-management library, canvas framework, UI framework, Three.js wrapper, Workbox, server framework, schema-validation library, or Google SDK.
+
+Subsystems:
+
+- Document reducer: project state, item actions, dirty state, and undo/redo.
+- Template registry: exact garment canvases, internal atlas panels, seams, and the single R6 preview binding.
+- Asset service: bounded image import and normalization to PNG.
+- Compositor: canonical-resolution output and automatic panel mapping.
+- 2D editor: viewport rendering and pointer interaction.
+- R6 preview: lazy-loaded read-only Three.js consumer of the compositor canvas.
+- Project service: validated local ZIP save/open.
+- Export service: Roblox PNG validation and download.
+- Pattern client/proxy: optional parent-enabled Gemini generation.
+- PWA shell: offline application assets without project persistence.
 
 ### Core types
 
 ```ts
 type GarmentType = "tshirt" | "shirt" | "pants";
-type RigType = "R6" | "R15";
-type TileMode = "off" | "repeat" | "mirror";
 type PlacementMode = "decal" | "pattern" | "full-map";
 
 interface Transform {
@@ -101,16 +131,10 @@ interface Transform {
   rotationDeg: number;
   scaleX: number;
   scaleY: number;
-  // Normalized source-image edge coordinates. Valid when:
-  // 0 <= x,y < 1; 0 < width <= 1-x; 0 < height <= 1-y.
   crop: { x: number; y: number; width: number; height: number };
 }
 
-type TransformOverride = Partial<Omit<Transform, "crop">> & {
-  crop?: Partial<Transform["crop"]>;
-};
-
-interface LayerBase {
+interface Layer {
   id: string;
   name: string;
   kind: "solid" | "raster";
@@ -118,50 +142,22 @@ interface LayerBase {
   color?: string;
   visible: boolean;
   opacity: number;
+  placement: PlacementMode;
   transform: Transform;
 }
 
-type Layer = LayerBase &
-  (
-    | {
-        placement: "full-map";
-        tileMode: "off";
-        targetPanels: "all";
-        panelOverrides?: never;
-      }
-    | {
-        placement: "decal";
-        tileMode: "off";
-        targetPanels: "all" | string[];
-        panelOverrides: Record<string, { transform?: TransformOverride }>;
-      }
-    | {
-        placement: "pattern";
-        tileMode: TileMode;
-        targetPanels: "all" | string[];
-        panelOverrides: Record<
-          string,
-          { transform?: TransformOverride; tileMode?: TileMode }
-        >;
-      }
-  );
-
-interface AssetManifestBase {
+interface AssetManifestEntry {
   id: string;
-  path: `assets/${string}.${"png" | "jpg" | "webp"}`;
+  path: `assets/${string}.png`;
   originalName: string;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  sourceMimeType: "image/png" | "image/jpeg" | "image/webp";
   byteLength: number;
   width: number;
   height: number;
   sha256: string;
+  source: "imported" | "generated";
+  prompt?: string;
 }
-
-type AssetManifestEntry = AssetManifestBase &
-  (
-    | { source: "imported" }
-    | { source: "generated"; prompt: string }
-  );
 
 interface ProjectDocumentV1 {
   format: "rbx-fashion-project";
@@ -170,140 +166,116 @@ interface ProjectDocumentV1 {
   garmentType: GarmentType;
   layers: Layer[];
   assets: AssetManifestEntry[];
-  view: {
-    rig: RigType;
-    camera: {
-      preset: "front" | "back" | "left" | "right" | "custom";
-      azimuthDeg: number;
-      elevationDeg: number;
-      distance: number;
-    };
-    background: string;
-  };
 }
 ```
+
+Garment type is fixed for an open project. Changing garment creates a new project; existing layers are never silently reinterpreted.
+
+### Image normalization
+
+Import accepts PNG, JPEG, and WebP, but the editable project stores normalized PNG assets only:
+
+1. Validate file size, magic bytes, MIME type, and decoded dimensions.
+2. Decode with explicit `imageOrientation: "from-image"`; where `createImageBitmap` does not conform, use a tested `<img>` fallback that applies the encoded orientation exactly once.
+3. Draw the oriented result once to an in-memory sRGB canvas.
+4. Encode that canvas to PNG and use those normalized bytes for editing, hashing, and project save/open.
+
+This intentionally does not preserve the exact original JPEG/WebP bytes. It avoids separate EXIF parsers and ensures a saved project reopens with the same orientation and dimensions. `originalName` and `sourceMimeType` are provenance labels only.
+
+Limits:
+
+- Maximum eight layers.
+- Maximum 20 MiB and 4096×4096 per imported source image.
+- Maximum 32 megapixels across decoded sources.
+- Maximum 50 MiB compressed and 128 MiB expanded project ZIP.
+- Maximum 32 ZIP entries.
+- Relative normalized ZIP paths only.
+
+Any failed image or project import leaves the current project unchanged.
+
+### Compositing
+
+The compositor renders to a hidden canonical canvas: 512×512 for T-shirts or 585×559 for shirts/pants. Checkerboards, guides, selections, and handles never enter the export canvas.
+
+Use the exact crop and center-pivot Canvas transform semantics in the technical preflight. Positive rotation is clockwise; scale values are finite and greater than zero; reflection is not supported.
+
+- Sticker draws once and clips automatically to the garment's named regions.
+- Repeat enumerates source tiles in internal garment space and clips them across the official panels, preserving continuity across declared atlas seams.
+- Fill Clothing maps the source over the complete canonical canvas. A canonical-size Roblox map defaults to scale 1; another source defaults to fit the canvas.
+- A repeated solid color uses direct clipped fills rather than enumerating 1×1 tiles.
+
+For raster patterns, allow at most 4,096 tile draws for one layer and 16,384 for one composition. If exceeded, show “Pattern is too small—make it larger” and block export until corrected.
+
+### Project save/open and export
 
 Project ZIP layout:
 
 ```text
 project.json
-assets/<asset-id>.<png|jpg|webp>
+assets/<asset-id>.png
 ```
 
-The archive preserves original source files, transforms, panel overrides, custom camera position, and generated-image prompt provenance. `originalName` is display-only; `path` must use the entry's ID and MIME-matching normalized extension. Width and height are the original decoded pixel dimensions, and `sha256` is lowercase hexadecimal over the exact stored asset bytes. On import, each asset's path, MIME type, byte length, decoded dimensions, and digest must match its manifest entry. It excludes API keys, undo history, caches, and rendered exports.
+Project save calculates the expanded payload before compression and rejects anything over 128 MiB. It then rejects a compressed result over 50 MiB, so every successfully saved project is eligible to reopen under the same limits. Project import validates the schema version, eight-layer limit, normalized paths, entry and byte limits, PNG headers, dimensions, byte lengths, and SHA-256 hashes before replacing the current document.
 
-### Import and export limits
+Export produces an sRGB PNG at exactly 512×512 or 585×559. Preflight re-decodes the result and verifies its MIME type, dimensions, nonempty pixel data, and alpha range. A completely transparent result produces a child-readable warning before download. The application explains that Roblox moderation and unsupported avatar packages are outside its control and recommends testing the image in Roblox Studio.
 
-- PNG, JPEG, and WebP only.
-- Maximum 20 MiB and 4096x4096 per image.
-- Maximum 32 layers.
-- Maximum 32 megapixels across decoded source images.
-- Maximum ZIP size: 50 MiB compressed and 128 MiB expanded.
-- Maximum 64 archive entries.
-- Relative normalized archive paths only.
-- Import is transactional: any error leaves the open project unchanged.
+### R6 preview and calibration
 
-These are universal upper bounds, not desktop-only targets. Before release, exercise one 4096x4096/20 MiB image, the 32-megapixel decoded-source budget, and the maximum project ZIP on physical iOS Safari and Android Chrome devices with 4 GiB RAM. The tab must not reload, terminate, or lose the current document. If either platform fails, lower the single published limits for every platform; do not use user-agent-based memory tiers.
+Use procedural R6 boxes from measurements captured from the current Roblox Studio Block Avatar R6. The compositor canvas becomes a clamp-to-edge sRGB `CanvasTexture` with Y-flip configured explicitly. The clothing surface uses a fixed negative polygon offset to avoid z-fighting without changing avatar dimensions.
 
-Exports are canonical-size sRGB PNGs:
+Generate one shirt, one pants, and one T-shirt calibration fixture. Apply them to an R6 Block Avatar in Studio and compare front, back, left, right, top, and bottom views with the web preview. The R6 checklist must pass before the preview is described as accurate or the MVP is released.
 
-- T-shirt: 512x512.
-- Shirt/pants: 585x559.
+R15 measurement, geometry, bindings, and calibration are post-MVP.
 
-Preflight verifies garment type, exact dimensions, successful decoding, nonempty output, and valid alpha values. Layer order, transforms, masks, and tiling are deterministic, but native Canvas resampling can produce small decoded-pixel differences between browser engines; byte-identical PNG output across browsers is not a requirement. It cannot guarantee moderation or rendering on unsupported avatar packages, so Roblox Studio testing remains a release/user instruction. See [Roblox testing guidance](https://create.roblox.com/docs/avatar/classic-clothing).
+### Offline behavior
 
-### AI pattern generation
+Cache only versioned application code, styles, icons, template data, and the lazy preview chunk. Never cache user images, project archives, generated patterns, prompts, or keys.
 
-The GitHub Pages build enables Generate only when a proxy URL is configured.
+Do not force a waiting service worker to activate. A new version activates naturally after all tabs using the old version close; this avoids a special dirty-document update workflow. No project state is persisted by the service worker.
 
-```http
-POST /api/patterns
-Content-Type: application/json
-X-Gemini-Api-Key: <session-only user key>
+## Delivery Order
 
-{"prompt":"1-500 Unicode characters"}
-```
+1. Application shell, exact template registry, and canonical PNG compositor/export.
+2. Child-facing mobile editor, eight-item reducer, image import, and undo/redo.
+3. Local project ZIP save/open.
+4. Single R6 preview and Studio calibration.
+5. Optional parent-configured AI generation, offline PWA, accessibility, and release checks.
 
-Success returns one square `image/png` body. Errors return normalized JSON codes for invalid request/key, safety rejection, quota, timeout, upstream failure, or invalid image.
-
-For an allowlisted `Origin`, `OPTIONS /api/patterns` returns `204` with that exact origin, `Vary: Origin`, allowed methods `POST, OPTIONS`, allowed headers `Content-Type, X-Gemini-Api-Key`, and a 600-second preflight cache. Production requests with a missing or disallowed origin return `403` without an `Access-Control-Allow-Origin` header. Local development origins must be added explicitly.
-
-The platform-neutral proxy:
-
-- Exports a Web `Request -> Response` handler.
-- Uses native `fetch` without a server framework or Google SDK.
-- Targets a deployment-configurable Gemini Flash Image model, initially `gemini-3.1-flash-image`, verified against Google's image-generation documentation on 2026-08-25. Verify the configured model again at deployment rather than assuming the identifier is permanent.
-- Requests one square PNG and adds a seamless, edge-to-edge textile-pattern instruction.
-- Enforces an exact origin allowlist, 60-second timeout, 4 KiB UTF-8 JSON-body limit, 1-500 Unicode-code-point prompt, PNG type, square dimensions, and 10 MiB response limit.
-- Does not claim distributed abuse-rate enforcement. The user-provided Gemini key supplies the provider quota; deployments may add platform-specific rate limiting outside this portable handler.
-- Never stores or logs prompts, images, or keys.
-- Redacts upstream errors.
-- Supplies a minimal Node 22 adapter for local/self-hosted deployment.
-
-The Gemini key remains only in frontend memory until page unload or Forget key. The UI must disclose that the configured proxy transiently receives the key and Google processes the request. Google recommends a backend proxy for production client applications. See [Google Gemini key guidance](https://ai.google.dev/gemini-api/docs/api-key) and [Google image-generation models](https://ai.google.dev/gemini-api/docs/image-generation?hl=en).
-
-If the proxy is absent or unreachable, only AI generation is unavailable.
-
-## Delivery and Implementation Order
-
-1. Encode and validate the pinned template registry, exact garment-space nets, calibration fixtures, and Studio rig measurements.
-2. Establish the Vite/Preact/PWA shell and document reducer.
-3. Implement transactional image import, layers, canonical compositor, transforms, panel targeting, tiling, and undo/redo.
-4. Implement canonical PNG export and versioned ZIP save/open.
-5. Add procedural R6/R15 preview geometry, texture synchronization, and the complete Studio calibration gate.
-6. Complete portrait, landscape, desktop, accessibility, and unsaved-work behavior.
-7. Add the optional Gemini pattern client and stateless proxy package.
-8. Add GitHub Actions quality gates and GitHub Pages deployment.
-
-GitHub Pages requirements:
-
-- Build and deploy from the default branch through GitHub Actions.
-- Respect repository subpath hosting in asset and service-worker URLs.
-- Cache only versioned application, template, icon, and avatar assets.
-- Never use localStorage, sessionStorage, or IndexedDB for project data.
-- Prompt before activating an updated service worker when work is unsaved. If the user defers, keep the current worker for that session, never force activation while the document is dirty, and prompt again on the next load or as soon as the document becomes clean.
-- Keep the proxy URL as non-secret deployment configuration.
-- Include no Gemini key in source, Actions, or the Pages artifact.
+Each stage must produce a usable vertical slice. AI and 3D preview failures never block 2D editing or valid PNG export.
 
 ## Test and Acceptance Plan
 
-Automated tests must cover:
+Automated tests cover:
 
-- Reducer history and dirty-state behavior.
-- Source-pixel crop conversion, resolved-override validation, transform order, placement-mode invariants, panel targeting, repeat, and mirror-repeat calculations.
-- T-shirt and atlas registry variants; exact dimensions, masks, affine transforms, continuous seam records, binding source bounds, and R6/R15 UV assignments.
-- Registry provenance hashes and calibration artifacts stay synchronized with the registry version; automated structural tests supplement, but do not replace, the independent Roblox Studio calibration gate.
-- Decoded-RGBA golden fixtures for rotation, scale, alpha, tiling, and panel clipping in the pinned CI Chromium version; exporting the same document twice in that engine must produce identical decoded pixels.
-- ZIP round-trip fidelity, schema-version rejection, zip-slip protection, entry/size limits, and transactional failure.
-- Exact output dimensions and document semantics in Chromium, Firefox, and WebKit; cross-engine tests assert dimensions, panel coverage, alpha bounds, and transform anchor placement without requiring byte-identical resampled pixels.
-- WebGL face winding, explicit CanvasTexture Y-flip, polygon-offset stability, fallback, and context recovery.
-- AI request/response validation, allowed and rejected CORS preflights, origin enforcement, payload limits, timeouts, error redaction, and proof that keys are never serialized or logged.
-- Complete create/save/reopen/export journeys for all garment types.
-- Portrait 390x844, landscape 844x390, and desktop 1440x900 layouts.
-- Touch-equivalent and keyboard controls.
-- Offline PWA reload with editing, ZIP I/O, and PNG export operational and Generate disabled.
-- Service-worker update acceptance and deferral with clean and dirty documents; a deferred worker must not activate during a dirty session.
-- Verification that project data never enters browser persistence.
+- Garment dimensions, exact atlas registry values, crop math, transform order, layer order, Sticker/Repeat/Fill behavior, tiling limits, and automatic panel clipping.
+- Dimension-based import routing for T-shirt, Shirt/Pants choice, and ordinary current-project images; choosing a new garment resets rather than reinterprets Items.
+- Eight-layer limit, 50-step history, visible Undo/Redo states, one-step gestures, dirty state, and transactional failures.
+- PNG/JPEG/WebP normalization, orientation fixtures, size/pixel limits, and normalized PNG round-trip.
+- ZIP round-trip, symmetric save/open size limits, schema rejection, zip-slip protection, entry/byte limits, hashes, and unchanged current state after failure.
+- Exact output dimensions and stable decoded pixels for repeat exports in pinned Chromium; Firefox and WebKit smoke-test dimensions, placement anchors, and alpha bounds.
+- Full create/edit/save/reopen/export journeys for T-shirt, Shirt, and Pants.
+- Mobile portrait, mobile landscape, coarse-pointer tablet portrait, and desktop layouts.
+- Pointer transitions, keyboard controls, 44×44 touch targets, focus behavior, and no serious or critical axe violations.
+- WebGL winding, texture orientation, polygon-offset stability, fallback, and context recovery without loss of 2D editing/export.
+- AI validation, CORS, timeout, redaction, and proof that keys/prompts are not serialized or persisted.
+- Offline reload with editing, project I/O, preview, and export available while Generate is unavailable.
 
-Quality targets:
+Release gates:
 
-- Latest two major Chrome, Edge, Firefox, desktop Safari, and iOS/iPadOS Safari releases.
-- WCAG 2.2 AA for standard controls, dialogs, sheets, focus, contrast, reduced motion, and 44x44 touch targets. Run axe-core in every automated viewport with no serious or critical violations; use Playwright bounding-box assertions for editor controls and keyboard focus-order tests; complete manual VoiceOver on iOS Safari and NVDA on desktop Firefox before release.
-- Initial JavaScript under 150 KiB gzip.
-- Lazy-loaded 3D chunk under 250 KiB gzip.
-- Total offline precache under 2 MiB.
-- Rendering coalesced during gestures; hidden canvases do no work.
-
-GitHub Actions runs typecheck, lint, unit tests, browser tests, production build, bundle budgets, and PWA checks before Pages deployment.
-
-Release requires the numbered-panel calibration gate on R6 and R15 plus a manual Roblox Studio/Creator Dashboard smoke test using one golden exported PNG for each of T-shirt, shirt, and pants. Record the official template source, hashes, screenshots, checklist, and verification date alongside the template registry.
+- R6 Studio calibration passes.
+- One exported PNG for each garment works in Roblox Studio/Creator Dashboard.
+- Representative physical iOS Safari and Android Chrome devices edit and export without tab reload or state loss.
+- Initial JavaScript remains under 150 KiB gzip, the lazy preview chunk under 250 KiB gzip, and the total offline cache under 2 MiB.
 
 ## Explicitly Deferred
 
-- AI generation of complete template-conforming shirt/pants maps from blank template references.
-- Image-guided AI generation.
-- Text, vector shapes, brushes, arbitrary masks, blend modes, and PSD/SVG workflows.
-- Animated avatar previews.
-- Marketplace avatar body packages.
-- Roblox login, upload, publishing, moderation, or commerce.
-- Layered-clothing mesh creation, fitting, rigging, skinning, cages, animation, or FBX/glTF export.
+- Named-panel selection, per-panel targeting, and per-panel transform overrides.
+- Mirror repeat and other advanced pattern modes.
+- More than eight layers, blend modes, masks, text, vector shapes, brushes, and PSD/SVG workflows.
+- R6/R15 switching, R15 preview, multiple avatar packages, camera presets, background customization, and animation.
+- Preservation of exact original JPEG/WebP files inside projects.
+- Custom service-worker update prompts or in-session forced updates.
+- AI generation of complete template-conforming maps and image-guided AI generation.
+- An operator-managed persistent AI key or public multi-user AI service; MVP uses a parent-supplied session key.
+- Roblox login, upload, publishing, moderation, commerce, accounts, analytics, or cloud project storage.
+- Layered-clothing mesh creation, fitting, rigging, skinning, cages, animation, geometry editing, or FBX/glTF export.
