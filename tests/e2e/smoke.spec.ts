@@ -1,0 +1,8 @@
+import { expect, test } from "@playwright/test";
+
+test("app shell renders the heading", async ({ page }) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Roblox Clothing Designer" }),
+  ).toBeVisible();
+});
