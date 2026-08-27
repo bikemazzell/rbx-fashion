@@ -85,3 +85,24 @@ test("retainOnly closes the bitmaps of dropped assets", () => {
   expect(kept.close).not.toHaveBeenCalled();
   expect(dropped.close).toHaveBeenCalledTimes(1);
 });
+
+test("add replaces an existing same-id asset and closes the old bitmap", () => {
+  const store = new AssetStore();
+  const original = bitmapAsset("same-id");
+  const replacement = bitmapAsset("same-id");
+  store.add(original.asset);
+  store.add(replacement.asset);
+  expect(store.size).toBe(1);
+  expect(store.get("same-id")).toBe(replacement.asset);
+  expect(original.close).toHaveBeenCalledTimes(1);
+  expect(replacement.close).not.toHaveBeenCalled();
+});
+
+test("re-adding the identical asset reference does not close it", () => {
+  const store = new AssetStore();
+  const entry = bitmapAsset("stable");
+  store.add(entry.asset);
+  store.add(entry.asset);
+  expect(store.size).toBe(1);
+  expect(entry.close).not.toHaveBeenCalled();
+});

@@ -408,9 +408,11 @@ export function DesignerApp() {
   const cancelPendingStart = () => {
     const pending = pendingStart;
     if (pending !== null && pending.go === "new-project" && pending.entry !== null) {
-      const entryId = pending.entry.id;
-      assets.remove(entryId);
-      setPendingRaster((current) => (current !== null && current.entry.id === entryId ? null : current));
+      assets.remove(pending.entry.id);
+      if (pendingRaster !== null && pendingRaster.entry.id === pending.entry.id) {
+        setPendingRaster(null);
+        setSheet(null);
+      }
     }
     setPendingStart(null);
   };

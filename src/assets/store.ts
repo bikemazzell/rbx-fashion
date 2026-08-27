@@ -22,6 +22,10 @@ export class AssetStore {
   }
 
   add(asset: NormalizedPngAsset): void {
+    const existing = this.assets.get(asset.id);
+    if (existing !== undefined && existing !== asset) {
+      releaseDrawable(existing);
+    }
     this.assets.set(asset.id, asset);
   }
 

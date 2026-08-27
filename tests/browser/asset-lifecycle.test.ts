@@ -133,6 +133,63 @@ test("cancelling the Shirt-or-Pants question closes the orphaned import bitmaps"
   }
 }, 15000);
 
+function byText(host: HTMLElement, text: string): HTMLButtonElement {
+  const buttons = Array.from(host.querySelectorAll("button")) as HTMLButtonElement[];
+  const found = buttons.find((button) => (button.textContent ?? "").trim() === text);
+  if (found === undefined) {
+    throw new Error(`missing button text ${text}`);
+  }
+  return found;
+}
+
+async function addColor(host: HTMLElement): Promise<void> {
+  byLabel(host, "Color").click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null,
+    "color sheet",
+  );
+  const swatch = requireEl(
+    host.querySelector('[role="dialog"][aria-label="Colors"] .swatch'),
+    "swatch",
+  ) as HTMLButtonElement;
+  swatch.click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Colors"]') === null,
+    "color sheet closes",
+  );
+}
+
+test("cancelling the unsaved dialog over a dirty question closes the dead sheet and bitmaps", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await addColor(host);
+  const tracker = trackBitmaps();
+  try {
+    await choosePicture(host, await pngFile(585, 559));
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Is this a Shirt or Pants?"]') !== null,
+      "question sheet",
+    );
+    byLabel(host, "Pants").click();
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Start a new project?"]') !== null,
+      "unsaved dialog",
+    );
+    byText(host, "Keep Editing").click();
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Is this a Shirt or Pants?"]') === null,
+      "question sheet closes after cancelling the unsaved dialog",
+    );
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(tracker.records.length).toBeGreaterThanOrEqual(2);
+    for (const record of tracker.records) {
+      expect(record.closed).toBe(true);
+    }
+  } finally {
+    tracker.restore();
+  }
+}, 15000);
+
 test("a cap-rejected picture import closes the orphaned bitmaps and keeps the cap message", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
