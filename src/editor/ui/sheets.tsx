@@ -4,7 +4,7 @@ import { isCropValid } from "../../compositor/math";
 import type { Layer } from "../../domain/types";
 import { EXPORT_DISCLAIMER } from "../../project/export";
 import type { TransformPatch } from "../state";
-import { PALETTE } from "./text";
+import { GENERATE_PARENT_SETUP_MESSAGE, PALETTE, PATTERN_IDEAS } from "./text";
 
 export function SheetBackdrop({ label, children }: { label: string; children: ComponentChildren }) {
   return (
@@ -19,12 +19,15 @@ export function SheetBackdrop({ label, children }: { label: string; children: Co
 export function AddSheet({
   onPicture,
   onChooseColor,
+  onGenerate,
   onCancel,
 }: {
   onPicture: (file: File) => void;
   onChooseColor: () => void;
+  onGenerate?: () => boolean;
   onCancel: () => void;
 }) {
+  const [generateBlocked, setGenerateBlocked] = useState(false);
   return (
     <SheetBackdrop label="Add">
       <h2 class="sheet-title">Add</h2>
@@ -46,6 +49,24 @@ export function AddSheet({
       <button type="button" class="big-choice" onClick={onChooseColor}>
         <span>Choose Color</span>
       </button>
+      {onGenerate !== undefined && (
+        <button
+          type="button"
+          class="big-choice"
+          onClick={() => {
+            if (!onGenerate()) {
+              setGenerateBlocked(true);
+            }
+          }}
+        >
+          <span>Generate a Pattern</span>
+        </button>
+      )}
+      {generateBlocked && (
+        <p class="sheet-text" role="status">
+          {GENERATE_PARENT_SETUP_MESSAGE}
+        </p>
+      )}
       <button type="button" class="sheet-cancel" aria-label="Cancel" onClick={onCancel}>
         Cancel
       </button>
@@ -148,6 +169,131 @@ export function UnsavedDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+export function ParentSettingsSheet({
+  hasKey,
+  onSaveKey,
+  onForgetKey,
+  onClose,
+}: {
+  hasKey: boolean;
+  onSaveKey: (key: string) => void;
+  onForgetKey: () => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const saveRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    saveRef.current?.focus();
+  }, []);
+  return (
+    <SheetBackdrop label="Parent Settings">
+      <h2 class="sheet-title">Parent Settings</h2>
+      <p class="sheet-text">The key stays on this device only until the page is closed or forgotten.</p>
+      <label class="field">
+        <span class="field-label">Gemini API key</span>
+        <input
+          type="password"
+          aria-label="Gemini API key"
+          autocomplete="off"
+          value={value}
+          onInput={(event) => setValue(event.currentTarget.value)}
+        />
+      </label>
+      <div class="dialog-actions">
+        <button
+          type="button"
+          ref={saveRef}
+          onClick={() => {
+            if (value.length > 0) {
+              onSaveKey(value);
+              setValue("");
+            }
+          }}
+        >
+          Save Key
+        </button>
+        <button type="button" onClick={onForgetKey}>
+          Forget Key
+        </button>
+      </div>
+      <p class="sheet-text" role="status">
+        {hasKey ? "A key is saved for this session." : "No key saved."}
+      </p>
+      <button type="button" class="sheet-done" aria-label="Done" onClick={onClose}>
+        Done
+      </button>
+    </SheetBackdrop>
+  );
+}
+
+export function GenerateSheet({
+  onGenerate,
+  onClose,
+}: {
+  onGenerate: (prompt: string, signal: AbortSignal) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [inFlight, setInFlight] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const start = async () => {
+    if (inFlight) {
+      return;
+    }
+    setInFlight(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      await onGenerate(prompt, controller.signal);
+    } finally {
+      abortRef.current = null;
+      setInFlight(false);
+    }
+  };
+  const cancel = () => {
+    const controller = abortRef.current;
+    if (controller !== null) {
+      controller.abort();
+    } else {
+      onClose();
+    }
+  };
+  return (
+    <SheetBackdrop label="Make a Pattern">
+      <h2 class="sheet-title">Make a Pattern</h2>
+      <label class="field">
+        <span class="field-label">What should the pattern look like?</span>
+        <textarea
+          aria-label="What should the pattern look like?"
+          rows={3}
+          value={prompt}
+          onInput={(event) => setPrompt(event.currentTarget.value)}
+        />
+      </label>
+      <div role="group" aria-label="Pattern ideas">
+        {PATTERN_IDEAS.map((idea) => (
+          <button key={idea} type="button" class="big-choice" onClick={() => setPrompt(idea)}>
+            <span>{idea}</span>
+          </button>
+        ))}
+      </div>
+      {inFlight && (
+        <p class="sheet-text" role="status">
+          Making your pattern…
+        </p>
+      )}
+      <div class="dialog-actions">
+        <button type="button" class="primary" aria-label="Generate" disabled={inFlight} onClick={() => void start()}>
+          Generate
+        </button>
+        <button type="button" aria-label="Cancel" onClick={cancel}>
+          Cancel
+        </button>
+      </div>
+    </SheetBackdrop>
   );
 }
 

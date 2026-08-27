@@ -31,6 +31,16 @@ export const PREVIEW_UNAVAILABLE_MESSAGE = "Preview isn't available on this devi
 
 export const PREVIEW_COMPOSE_FAILED_MESSAGE = "Something went wrong showing the preview. Your clothing is still safe.";
 
+export const GENERATE_INVALID_PROMPT_MESSAGE = "Please describe your pattern with 1 to 500 letters.";
+
+export const GENERATE_PARENT_SETUP_MESSAGE = "Ask a parent to add a key in Parent Settings.";
+
+export const GENERATE_FAILED_MESSAGE = "Something went wrong making your pattern. Try again.";
+
+export const GENERATE_TIMEOUT_MESSAGE = "Making the pattern took too long. Try again.";
+
+export const PATTERN_IDEAS: readonly string[] = ["Rainy day dots", "Happy frogs", "Starry night sky"];
+
 export function composeFailureMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "kind" in error && "message" in error) {
     const failure = error as { kind: unknown; message: unknown };

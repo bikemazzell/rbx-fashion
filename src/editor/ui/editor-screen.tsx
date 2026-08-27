@@ -18,6 +18,7 @@ import {
   AddSheet,
   ColorSheet,
   DisclaimerSheet,
+  GenerateSheet,
   MoreSheet,
   QuestionSheet,
   SheetBackdrop,
@@ -33,7 +34,7 @@ const PLACEMENTS: readonly { label: string; value: PlacementMode }[] = [
 
 type TabKind = "edit" | "preview";
 type ToolKind = "add" | "move" | "repeat" | "color" | "preview" | "export";
-type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer";
+type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer" | "generate";
 
 export interface EditorScreenProps {
   session: EditorSession;
@@ -73,6 +74,9 @@ export interface EditorScreenProps {
   onOpacityCommit: (percent: number) => void;
   onFile: (file: File) => void;
   onSwatch: (color: string) => void;
+  generateEnabled: boolean;
+  onGenerateFromAdd: () => boolean;
+  onGeneratePattern: (prompt: string, signal: AbortSignal) => Promise<void>;
   onAnswerGarment: (garment: "shirt" | "pants") => void;
   onCancelQuestion: () => void;
   onCloseSheet: () => void;
@@ -265,8 +269,12 @@ export function EditorScreen(props: EditorScreenProps) {
         <AddSheet
           onPicture={props.onFile}
           onChooseColor={() => props.onToolbar("color")}
+          onGenerate={props.generateEnabled ? props.onGenerateFromAdd : undefined}
           onCancel={props.onCloseSheet}
         />
+      )}
+      {props.sheet === "generate" && (
+        <GenerateSheet onGenerate={props.onGeneratePattern} onClose={props.onCloseSheet} />
       )}
       {props.sheet === "color" && (
         <ColorSheet onSwatch={props.onSwatch} onCancel={props.onCloseSheet} />

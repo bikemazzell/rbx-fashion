@@ -21,6 +21,7 @@
   "include": [
     "src",
     "tests",
+    "proxy",
     "scripts",
     "vite.config.ts",
     "vitest.config.ts",

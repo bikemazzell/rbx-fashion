@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { AssetStore } from "../../assets/store";
+import { AssetStore, pngAssetFromBytes } from "../../assets/store";
+import type { NormalizedPngAsset } from "../../assets/store";
+import { sha256Hex } from "../../assets/hash";
 import { defaultTransform } from "../../compositor/math";
 import { getTemplate } from "../../domain/registry";
 import { LIMITS } from "../../domain/types";
 import type {
+  AssetManifestEntry,
   GarmentType,
   PlacementMode,
   TemplateRegistryEntry,
   Transform,
 } from "../../domain/types";
+import { generatePattern, PATTERN_PROXY_URL } from "../../ai/pattern-client";
 import { openProject, saveProject } from "../../project/archive";
 import { downloadBlob, exportRobloxPng, TRANSPARENT_WARNING } from "../../project/export";
 import { importImage } from "../import";
@@ -17,25 +21,34 @@ import { createSession, createSessionFromDocument, dispatch } from "../state";
 import type { EditorAction, EditorSession, ItemSpec, TransformPatch } from "../state";
 import { EditorScreen } from "./editor-screen";
 import { StartScreen } from "./start-screen";
+import { ParentSettingsSheet } from "./sheets";
 import {
   EXPORT_FAILED_MESSAGE,
+  GENERATE_FAILED_MESSAGE,
   ITEM_CAP_MESSAGE,
   OPEN_INVALID_MESSAGE,
   composeFailureMessage,
 } from "./text";
 
-type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer";
+type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer" | "generate";
 
 interface PendingRaster {
   assetId: string;
   width: number;
   height: number;
   megapixels: number;
+  entry: AssetManifestEntry;
 }
 
 type PendingStart =
   | { go: "start-screen" }
-  | { go: "new-project"; garment: GarmentType; item: ItemSpec | null; megapixels: number }
+  | {
+      go: "new-project";
+      garment: GarmentType;
+      item: ItemSpec | null;
+      entry: AssetManifestEntry | null;
+      megapixels: number;
+    }
   | { go: "open-file" };
 
 function placementTransform(
@@ -78,6 +91,9 @@ export function DesignerApp() {
   const [composeError, setComposeError] = useState<string | null>(null);
   const [transparentWarning, setTransparentWarning] = useState<string | null>(null);
   const [importedMegapixels, setImportedMegapixels] = useState(0);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [parentSheetOpen, setParentSheetOpen] = useState(false);
+  const generateEnabled = PATTERN_PROXY_URL !== undefined && PATTERN_PROXY_URL.length > 0;
   const [desktop, setDesktop] = useState(() =>
     window.matchMedia("(min-width: 1024px) and (pointer: fine)").matches,
   );
@@ -202,7 +218,12 @@ export function DesignerApp() {
     resetTransient();
   };
 
-  const runNewProject = (garment: GarmentType, item: ItemSpec | null, megapixels: number) => {
+  const runNewProject = (
+    garment: GarmentType,
+    item: ItemSpec | null,
+    entry: AssetManifestEntry | null,
+    megapixels: number,
+  ) => {
     const current = sessionRef.current;
     if (current === null) {
       return;
@@ -210,6 +231,12 @@ export function DesignerApp() {
     let next = dispatch(current, { type: "new-project", garment });
     if (item !== null) {
       next = dispatch(next, { type: "add-item", item });
+      if (entry !== null) {
+        next = {
+          ...next,
+          document: { ...next.document, assets: [...next.document.assets, entry] },
+        };
+      }
     }
     commitSession(next);
     setSelectedItemId(item === null ? null : topLayerId(next));
@@ -217,16 +244,21 @@ export function DesignerApp() {
     resetTransient();
   };
 
-  const beginNewProject = (garment: GarmentType, item: ItemSpec | null, megapixels: number) => {
+  const beginNewProject = (
+    garment: GarmentType,
+    item: ItemSpec | null,
+    entry: AssetManifestEntry | null,
+    megapixels: number,
+  ) => {
     const current = sessionRef.current;
     if (current === null) {
       return;
     }
     if (current.dirty) {
-      setPendingStart({ go: "new-project", garment, item, megapixels });
+      setPendingStart({ go: "new-project", garment, item, entry, megapixels });
       return;
     }
-    runNewProject(garment, item, megapixels);
+    runNewProject(garment, item, entry, megapixels);
   };
 
   const goStartScreen = () => {
@@ -262,7 +294,7 @@ export function DesignerApp() {
       openFileInputRef.current?.click();
       return;
     }
-    runNewProject(pending.garment, pending.item, pending.megapixels);
+    runNewProject(pending.garment, pending.item, pending.entry, pending.megapixels);
   };
 
   const addSolid = (color: string) => {
@@ -315,7 +347,11 @@ export function DesignerApp() {
         placement: "decal",
         transform: placementTransform("decal", outcome.asset, template),
       };
-      const next = dispatch(captured, { type: "add-item", item });
+      const added = dispatch(captured, { type: "add-item", item });
+      const next: EditorSession = {
+        ...added,
+        document: { ...added.document, assets: [...added.document.assets, outcome.asset] },
+      };
       if (commitIfChanged(captured, next)) {
         setSelectedItemId(topLayerId(next));
         setImportedMegapixels((value) => value + outcome.megapixels);
@@ -326,6 +362,7 @@ export function DesignerApp() {
       beginNewProject(
         "tshirt",
         fullMapItem("tshirt", outcome.asset.id, outcome.asset),
+        outcome.asset,
         outcome.megapixels,
       );
       return;
@@ -335,18 +372,21 @@ export function DesignerApp() {
       width: outcome.asset.width,
       height: outcome.asset.height,
       megapixels: outcome.megapixels,
+      entry: outcome.asset,
     });
     setSheet("question");
   };
 
   const answerGarment = (garment: "shirt" | "pants") => {
-    if (pendingRaster === null) {
+    const pending = pendingRaster;
+    if (pending === null) {
       return;
     }
     beginNewProject(
       garment,
-      fullMapItem(garment, pendingRaster.assetId, pendingRaster),
-      pendingRaster.megapixels,
+      fullMapItem(garment, pending.assetId, pending),
+      pending.entry,
+      pending.megapixels,
     );
   };
 
@@ -544,6 +584,104 @@ export function DesignerApp() {
     }
   };
 
+  const onGenerateFromAdd = (): boolean => {
+    if (apiKey === null) {
+      return false;
+    }
+    setSheet("generate");
+    return true;
+  };
+
+  const insertGeneratedPattern = async (
+    captured: EditorSession,
+    bytes: Uint8Array<ArrayBuffer>,
+    prompt: string,
+  ): Promise<void> => {
+    const id = crypto.randomUUID();
+    let asset: NormalizedPngAsset;
+    try {
+      asset = await pngAssetFromBytes(bytes, id);
+    } catch {
+      setSheet(null);
+      setNotice(GENERATE_FAILED_MESSAGE);
+      return;
+    }
+    if (sessionRef.current !== captured) {
+      return;
+    }
+    const megapixels = (asset.width * asset.height) / 1_000_000;
+    if (
+      asset.width > LIMITS.IMPORT_MAX_DIM ||
+      asset.height > LIMITS.IMPORT_MAX_DIM ||
+      importedMegapixels + megapixels > LIMITS.IMPORT_MAX_MEGAPIXELS + 1e-6
+    ) {
+      setSheet(null);
+      setNotice(GENERATE_FAILED_MESSAGE);
+      return;
+    }
+    if (captured.document.layers.length >= LIMITS.MAX_LAYERS) {
+      setSheet(null);
+      setNotice(ITEM_CAP_MESSAGE);
+      return;
+    }
+    const sha256 = await sha256Hex(asset.bytes);
+    if (sessionRef.current !== captured) {
+      return;
+    }
+    const entry: AssetManifestEntry = {
+      id,
+      path: `assets/${id}.png`,
+      originalName: "AI pattern",
+      sourceMimeType: "image/png",
+      byteLength: asset.bytes.length,
+      width: asset.width,
+      height: asset.height,
+      sha256,
+      source: "generated",
+      prompt,
+    };
+    assets.add(asset);
+    const template = getTemplate(captured.document.garmentType);
+    const item: ItemSpec = {
+      kind: "raster",
+      assetId: id,
+      placement: "pattern",
+      transform: placementTransform("pattern", { width: asset.width, height: asset.height }, template),
+    };
+    const added = dispatch(captured, { type: "add-item", item });
+    const next: EditorSession = {
+      ...added,
+      document: { ...added.document, assets: [...added.document.assets, entry] },
+    };
+    if (commitIfChanged(captured, next)) {
+      setSelectedItemId(topLayerId(next));
+      setImportedMegapixels((value) => value + megapixels);
+    }
+    setSheet(null);
+  };
+
+  const onGeneratePattern = async (prompt: string, signal: AbortSignal): Promise<void> => {
+    const captured = sessionRef.current;
+    const proxyUrl = PATTERN_PROXY_URL;
+    const key = apiKey;
+    if (captured === null || proxyUrl === undefined || key === null) {
+      setSheet(null);
+      return;
+    }
+    const outcome = await generatePattern({ proxyUrl, apiKey: key, prompt, signal });
+    if (sessionRef.current !== captured) {
+      return;
+    }
+    if (!outcome.ok) {
+      setSheet(null);
+      if (outcome.kind !== "cancelled") {
+        setNotice(outcome.message);
+      }
+      return;
+    }
+    await insertGeneratedPattern(captured, outcome.bytes, prompt);
+  };
+
   const onTransformCommit = (patch: TransformPatch) => {
     if (selectedLayer === null) {
       return;
@@ -560,7 +698,22 @@ export function DesignerApp() {
   };
 
   if (session === null) {
-    return <StartScreen onChoose={startGarment} />;
+    return (
+      <>
+        <StartScreen
+          onChoose={startGarment}
+          onParentSettings={generateEnabled ? () => setParentSheetOpen(true) : undefined}
+        />
+        {parentSheetOpen && (
+          <ParentSettingsSheet
+            hasKey={apiKey !== null}
+            onSaveKey={(key) => setApiKey(key)}
+            onForgetKey={() => setApiKey(null)}
+            onClose={() => setParentSheetOpen(false)}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -603,6 +756,9 @@ export function DesignerApp() {
         onOpacityCommit={onOpacityCommit}
         onFile={handleFile}
         onSwatch={onSwatch}
+        generateEnabled={generateEnabled}
+        onGenerateFromAdd={onGenerateFromAdd}
+        onGeneratePattern={onGeneratePattern}
         onAnswerGarment={answerGarment}
         onCancelQuestion={() => {
           setPendingRaster(null);

@@ -6,7 +6,13 @@ const CARDS: readonly { garment: GarmentType; label: string }[] = [
   { garment: "pants", label: "Pants" },
 ];
 
-export function StartScreen({ onChoose }: { onChoose: (garment: GarmentType) => void }) {
+export function StartScreen({
+  onChoose,
+  onParentSettings,
+}: {
+  onChoose: (garment: GarmentType) => void;
+  onParentSettings?: () => void;
+}) {
   return (
     <main class="start-screen">
       <h1>Roblox Clothing Designer</h1>
@@ -25,6 +31,13 @@ export function StartScreen({ onChoose }: { onChoose: (garment: GarmentType) => 
           </button>
         ))}
       </div>
+      {onParentSettings !== undefined && (
+        <footer class="start-footer">
+          <button type="button" class="start-footer-button" aria-label="Parent Settings" onClick={onParentSettings}>
+            Parent Settings
+          </button>
+        </footer>
+      )}
     </main>
   );
 }

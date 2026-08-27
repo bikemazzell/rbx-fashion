@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { Zip, ZipDeflate, zipSync } from "fflate";
+import { Zip, ZipDeflate, unzipSync, zipSync } from "fflate";
 import { AssetStore, pngAssetFromCanvas } from "../../src/assets/store";
 import { sha256Hex } from "../../src/assets/hash";
 import { defaultTransform } from "../../src/compositor/math";
@@ -595,3 +595,222 @@ test("openProject aborts incrementally when a multi-push data-descriptor entry d
     message: OPEN_TOO_BIG_MESSAGE,
   });
 }, 10000);
+
+function captureBlobDownloads(): { blobs: Blob[]; restore: () => void } {
+  const blobs: Blob[] = [];
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  URL.createObjectURL = ((blob: Blob) => {
+    blobs.push(blob);
+    return "blob:test";
+  }) as typeof URL.createObjectURL;
+  URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+  const onClickCapture = (event: MouseEvent) => {
+    const target = event.target as HTMLAnchorElement | null;
+    if (target !== null && target.tagName === "A" && target.download) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+  document.addEventListener("click", onClickCapture, true);
+  return {
+    blobs,
+    restore: () => {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      document.removeEventListener("click", onClickCapture, true);
+    },
+  };
+}
+
+async function pictureFile(width: number, height: number): Promise<File> {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) {
+    throw new Error("2d context unavailable");
+  }
+  ctx.fillStyle = "#e07b39";
+  ctx.fillRect(0, 0, width, height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (blob === null) {
+    throw new Error("png encoding failed");
+  }
+  return new File([blob], "art.png", { type: "image/png" });
+}
+
+async function choosePicture(host: HTMLElement, file: File): Promise<void> {
+  (requireEl(host.querySelector('.toolbar [aria-label="Add"]'), "add tool") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Add"]') !== null,
+    "add sheet",
+  );
+  const input = requireEl(
+    host.querySelector('[role="dialog"][aria-label="Add"] input[type="file"]'),
+    "file input",
+  ) as HTMLInputElement;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+test("a picture imported through the UI survives save and reopen with its asset in the ZIP", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await choosePicture(host, await pictureFile(96, 64));
+  await waitFor(
+    () => host.querySelector(".selection-bar") !== null,
+    "imported picture selected",
+  );
+  const namesAfterImport = await itemNames(host);
+  expect(namesAfterImport).toEqual(["Picture 1"]);
+  const stub = captureBlobDownloads();
+  try {
+    (byText(host, "Save") as HTMLButtonElement).click();
+    await waitFor(() => stub.blobs.length === 1, "save download");
+  } finally {
+    stub.restore();
+  }
+  const zipBytes = new Uint8Array(await (stub.blobs[0] as Blob).arrayBuffer());
+  const files = unzipSync(zipBytes);
+  const project = JSON.parse(new TextDecoder().decode(files["project.json"])) as {
+    layers: { kind: string; assetId?: string }[];
+    assets: { id: string; byteLength: number; source: string }[];
+  };
+  expect(project.layers.length).toBe(1);
+  expect(project.layers[0]?.kind).toBe("raster");
+  const assetId = project.layers[0]?.assetId;
+  expect(typeof assetId).toBe("string");
+  expect(project.assets.length).toBe(1);
+  const entry = project.assets[0];
+  if (entry === undefined) {
+    throw new Error("missing manifest entry");
+  }
+  expect(entry.id).toBe(assetId);
+  expect(entry.source).toBe("imported");
+  const assetKey = `assets/${entry.id}.png`;
+  const assetBytes = files[assetKey];
+  expect(assetBytes).toBeDefined();
+  if (assetBytes !== undefined) {
+    expect(assetBytes.length).toBe(entry.byteLength);
+  }
+  await chooseOpenFile(
+    host,
+    new File([zipBytes], "My Shirt.rbxcloth.zip", { type: "application/zip" }),
+  );
+  await waitFor(
+    () => host.querySelector(".selection-bar") !== null,
+    "reopened picture selected",
+  );
+  await waitFor(
+    () => (byLabel(host, "Undo") as HTMLButtonElement).disabled,
+    "reopened session settles (undo stack empty)",
+  );
+  const namesAfterReopen = await itemNames(host);
+  expect(namesAfterReopen).toEqual(["Picture 1"]);
+}, 15000);
+
+interface SavedProject {
+  name: string;
+  layers: { kind: string; assetId?: string; placement: string }[];
+  assets: { id: string; byteLength: number; source: string }[];
+}
+
+function parseSavedProject(files: Record<string, Uint8Array>): SavedProject {
+  return JSON.parse(new TextDecoder().decode(files["project.json"])) as SavedProject;
+}
+
+function assertSingleImportedAsset(
+  files: Record<string, Uint8Array>,
+  project: SavedProject,
+): void {
+  expect(project.layers.length).toBe(1);
+  expect(project.layers[0]?.kind).toBe("raster");
+  const assetId = project.layers[0]?.assetId;
+  expect(typeof assetId).toBe("string");
+  expect(project.assets.length).toBe(1);
+  const entry = project.assets[0];
+  if (entry === undefined) {
+    throw new Error("missing manifest entry");
+  }
+  expect(entry.id).toBe(assetId);
+  expect(entry.source).toBe("imported");
+  const assetBytes = files[`assets/${entry.id}.png`];
+  expect(assetBytes).toBeDefined();
+  if (assetBytes !== undefined) {
+    expect(assetBytes.length).toBe(entry.byteLength);
+  }
+}
+
+async function saveViaUi(host: HTMLElement): Promise<Uint8Array<ArrayBuffer>> {
+  const stub = captureBlobDownloads();
+  try {
+    (byText(host, "Save") as HTMLButtonElement).click();
+    await waitFor(() => stub.blobs.length === 1, "save download");
+  } finally {
+    stub.restore();
+  }
+  return new Uint8Array(await (stub.blobs[0] as Blob).arrayBuffer());
+}
+
+async function reopenViaUi(
+  host: HTMLElement,
+  zipBytes: Uint8Array<ArrayBuffer>,
+  filename: string,
+): Promise<string[]> {
+  await chooseOpenFile(host, new File([zipBytes], filename, { type: "application/zip" }));
+  await waitFor(
+    () => (byLabel(host, "Undo") as HTMLButtonElement).disabled,
+    "reopened session settles (undo stack empty)",
+  );
+  return itemNames(host);
+}
+
+test("a 585x559 import answered through the dirty dialog keeps its asset in the saved Pants project", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await addColor(host, 0);
+  await choosePicture(host, await pictureFile(585, 559));
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Is this a Shirt or Pants?"]') !== null,
+    "garment question sheet",
+  );
+  (byText(host, "Pants") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Start a new project?"]') !== null,
+    "unsaved dialog before replacing the dirty project",
+  );
+  (byText(host, "Start New") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector("h1")?.textContent === "My Pants",
+    "pants project created",
+  );
+  const zipBytes = await saveViaUi(host);
+  const files = unzipSync(zipBytes);
+  const project = parseSavedProject(files);
+  expect(project.name).toBe("My Pants");
+  expect(project.layers[0]?.placement).toBe("full-map");
+  assertSingleImportedAsset(files, project);
+  const namesAfterReopen = await reopenViaUi(host, zipBytes, "My Pants.rbxcloth.zip");
+  expect(namesAfterReopen).toEqual(["Picture 1"]);
+}, 15000);
+
+test("a 512x512 import creates a tshirt project whose saved ZIP keeps the asset", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await choosePicture(host, await pictureFile(512, 512));
+  await waitFor(
+    () => host.querySelector("h1")?.textContent === "My T-shirt",
+    "tshirt project created",
+  );
+  const zipBytes = await saveViaUi(host);
+  const files = unzipSync(zipBytes);
+  const project = parseSavedProject(files);
+  expect(project.name).toBe("My T-shirt");
+  expect(project.layers[0]?.placement).toBe("full-map");
+  assertSingleImportedAsset(files, project);
+  const namesAfterReopen = await reopenViaUi(host, zipBytes, "My T-shirt.rbxcloth.zip");
+  expect(namesAfterReopen).toEqual(["Picture 1"]);
+}, 15000);
