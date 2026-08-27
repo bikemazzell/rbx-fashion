@@ -1,0 +1,15 @@
+[0m
+> reviewer · glm-5.3
+[0m
+[0m✱ [0mGlob "src/**/*"[90m 0 matches[0m
+[0m✱ [0mGlob "{package.json,package-lock.json}"[90m 0 matches[0m
+[0m✗ [0mweb-search-prime_web_search_prime {"search_query":"ESLint v10 release","location":"us","content_size":"medium"} failed
+[91m[1mError: [0mMCP error -429: {"error":{"code":"1302","message":"Rate limit reached for requests"}}
+[0m✗ [0mweb-search-prime_web_search_prime {"search_query":"three.js r185 release","location":"us","content_size":"medium"} failed
+[91m[1mError: [0mMCP error -429: {"error":{"code":"1302","message":"Rate limit reached for requests"}}
+[0m⚙ [0mweb-search-prime_web_search_prime {"search_query":"Vite 8 release announcement","location":"us","content_size":"medium"}
+[0m⚙ [0mweb-search-prime_web_search_prime {"search_query":"TypeScript 7.0 native compiler release npm","location":"us","content_size":"medium"}
+[0m✗ [0mweb-search-prime_web_search_prime {"search_query":"Vitest 4 release notes","location":"us","content_size":"medium"} failed
+[91m[1mError: [0mMCP error -32001: Request timed out
+[0m✗ [0mweb-search-prime_web_search_prime {"search_query":"Playwright 1.62 release notes","location":"us","content_size":"medium"} failed
+[91m[1mError: [0mMCP error -32001: Request timed out
