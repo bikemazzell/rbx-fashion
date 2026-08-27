@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:unit": "vitest run --project unit",
-    "test:browser": "vitest run --project browser-chromium --project browser-smoke",
+    "test:browser": "vitest run --project browser-chromium --project browser-smoke --project browser-preview-smoke",
     "check:bundle": "node scripts/check-bundle.mjs",
     "calibration:fixtures": "node --experimental-strip-types scripts/generate-calibration.mjs",
     "test:pwa": "node scripts/test-pwa.mjs",

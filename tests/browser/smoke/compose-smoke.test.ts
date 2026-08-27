@@ -100,14 +100,18 @@ test("full-map quadrant anchors land with correct canvas dimensions and alpha bo
   for (const ctx of [tshirtCtx, shirtCtx]) {
     const image = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height).data;
     let opaque = 0;
+    let minAlpha = 255;
+    let maxAlpha = 0;
     for (let index = 3; index < image.length; index += 4) {
       const alpha = image[index] ?? 0;
-      expect(alpha).toBeGreaterThanOrEqual(0);
-      expect(alpha).toBeLessThanOrEqual(255);
+      minAlpha = Math.min(minAlpha, alpha);
+      maxAlpha = Math.max(maxAlpha, alpha);
       if (alpha > 0) {
         opaque++;
       }
     }
+    expect(minAlpha).toBeGreaterThanOrEqual(0);
+    expect(maxAlpha).toBeLessThanOrEqual(255);
     expect(opaque).toBeGreaterThan(0);
   }
 });
