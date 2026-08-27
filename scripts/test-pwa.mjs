@@ -97,6 +97,16 @@ async function run() {
       }
     });
 
+    await step("seed-caches", async () => {
+      await page.goto(`${BASE}manifest.webmanifest`, { waitUntil: "load", timeout: 30000 });
+      await page.evaluate(async () => {
+        const foreign = await caches.open("other-project-v1");
+        await foreign.put("/", new Response("x"));
+        const stale = await caches.open("rbx-fashion-v-stale");
+        await stale.put("/", new Response("x"));
+      });
+    });
+
     await step("sw-install", async () => {
       await page.goto(BASE, { waitUntil: "load", timeout: 30000 });
       await page.evaluate(() => navigator.serviceWorker.ready);
@@ -122,10 +132,11 @@ async function run() {
       );
       const state = await page.evaluate(async () => {
         const keys = await caches.keys();
+        const appKeys = keys.filter((key) => key.startsWith("rbx-fashion-v"));
         const entries = [];
         let totalBytes = 0;
-        if (keys.length === 1) {
-          const cache = await caches.open(keys[0]);
+        if (appKeys.length === 1) {
+          const cache = await caches.open(appKeys[0]);
           for (const request of await cache.keys()) {
             const response = await cache.match(request);
             const bytes = (await response.arrayBuffer()).byteLength;
@@ -133,11 +144,17 @@ async function run() {
             totalBytes += bytes;
           }
         }
-        return { keys, entries, totalBytes };
+        return { keys, appKeys, entries, totalBytes };
       });
       summary = { precacheEntries: state.entries.length, precacheBytes: state.totalBytes };
-      if (state.keys.length !== 1) {
-        fail("precache", `expected exactly 1 cache, found ${state.keys.length}`);
+      if (state.appKeys.length !== 1) {
+        fail("precache", `expected exactly 1 rbx-fashion cache, found ${state.appKeys.length}`);
+      }
+      if (!state.keys.includes("other-project-v1")) {
+        fail("precache", "activation deleted the foreign cache other-project-v1");
+      }
+      if (state.keys.includes("rbx-fashion-v-stale")) {
+        fail("precache", "activation kept the stale app cache rbx-fashion-v-stale");
       }
       for (const entry of state.entries) {
         if (!precachePaths.has(entry.path)) {

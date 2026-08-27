@@ -235,7 +235,7 @@ test("parent settings saves and forgets a session key without touching storage",
       "parent settings sheet",
     );
     const sheet = dialog(host, "Parent Settings");
-    expect(sheet.textContent).toContain("The key stays on this device only until the page is closed or forgotten.");
+    expect(sheet.textContent).toContain("The key is kept in memory for this session only and is sent to the pattern service when your child generates a picture.");
     const input = requireEl(sheet.querySelector('input[aria-label="Gemini API key"]'), "key input") as HTMLInputElement;
     expect(input.type).toBe("password");
     expect(input.getAttribute("autocomplete")).toBe("off");

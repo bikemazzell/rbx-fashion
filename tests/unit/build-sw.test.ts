@@ -22,10 +22,11 @@ test("install precaches with addAll and waits", () => {
   expect(source.includes("addAll(URLS)")).toBe(true);
 });
 
-test("activate deletes every cache that is not the current version", () => {
+test("activate deletes only this app's stale caches, never foreign caches on the same origin", () => {
   const source = renderServiceWorker(PRECACHE_URLS, "deadbeefcafe0123");
   expect(source.includes("addEventListener(\"activate\"")).toBe(true);
   expect(source.includes("caches.keys()")).toBe(true);
+  expect(source.includes("k.startsWith(PRECACHE)")).toBe(true);
   expect(source.includes("k !== PRECACHE + VERSION")).toBe(true);
   expect(source.includes("caches.delete(k)")).toBe(true);
 });

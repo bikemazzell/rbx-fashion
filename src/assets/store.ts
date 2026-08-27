@@ -6,6 +6,12 @@ export interface NormalizedPngAsset {
   drawable: ImageBitmap | HTMLCanvasElement;
 }
 
+function releaseDrawable(asset: NormalizedPngAsset): void {
+  if (typeof (asset.drawable as ImageBitmap).close === "function") {
+    (asset.drawable as ImageBitmap).close();
+  }
+}
+
 export class AssetStore {
   private readonly assets = new Map<string, NormalizedPngAsset>();
 
@@ -27,11 +33,22 @@ export class AssetStore {
     return this.assets.has(id);
   }
 
+  remove(id: string): boolean {
+    const asset = this.assets.get(id);
+    if (asset === undefined) {
+      return false;
+    }
+    this.assets.delete(id);
+    releaseDrawable(asset);
+    return true;
+  }
+
   retainOnly(ids: Iterable<string>): void {
     const keep = new Set(ids);
-    for (const id of this.assets.keys()) {
+    for (const [id, asset] of this.assets) {
       if (!keep.has(id)) {
         this.assets.delete(id);
+        releaseDrawable(asset);
       }
     }
   }

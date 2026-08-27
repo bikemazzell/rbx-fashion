@@ -332,6 +332,9 @@ export function DesignerApp() {
     setSheet(null);
     const outcome = await importImage(file, { assets, importedMegapixels });
     if (sessionRef.current !== captured) {
+      if (outcome.ok) {
+        assets.remove(outcome.asset.id);
+      }
       return;
     }
     if (!outcome.ok) {
@@ -340,6 +343,7 @@ export function DesignerApp() {
     }
     if (outcome.route === "add-item") {
       if (captured.document.layers.length >= LIMITS.MAX_LAYERS) {
+        assets.remove(outcome.asset.id);
         setNotice(ITEM_CAP_MESSAGE);
         return;
       }
@@ -391,6 +395,24 @@ export function DesignerApp() {
       pending.entry,
       pending.megapixels,
     );
+  };
+
+  const cancelQuestion = () => {
+    if (pendingRaster !== null) {
+      assets.remove(pendingRaster.entry.id);
+    }
+    setPendingRaster(null);
+    setSheet(null);
+  };
+
+  const cancelPendingStart = () => {
+    const pending = pendingStart;
+    if (pending !== null && pending.go === "new-project" && pending.entry !== null) {
+      const entryId = pending.entry.id;
+      assets.remove(entryId);
+      setPendingRaster((current) => (current !== null && current.entry.id === entryId ? null : current));
+    }
+    setPendingStart(null);
   };
 
   const onExport = async () => {
@@ -763,16 +785,13 @@ export function DesignerApp() {
         generateEnabled={generateEnabled}
         onGenerateFromAdd={onGenerateFromAdd}
         onGeneratePattern={onGeneratePattern}
-        onAnswerGarment={answerGarment}
-        onCancelQuestion={() => {
-          setPendingRaster(null);
-          setSheet(null);
-        }}
-        onCloseSheet={() => setSheet(null)}
-        onOpenItems={() => setSheet("items")}
-        onOpenMore={() => setSheet("more")}
-        onConfirmPendingStart={confirmPendingStart}
-        onCancelPendingStart={() => setPendingStart(null)}
+          onAnswerGarment={answerGarment}
+          onCancelQuestion={cancelQuestion}
+          onCloseSheet={() => setSheet(null)}
+          onOpenItems={() => setSheet("items")}
+          onOpenMore={() => setSheet("more")}
+          onConfirmPendingStart={confirmPendingStart}
+          onCancelPendingStart={cancelPendingStart}
       />
       <input
         ref={openFileInputRef}

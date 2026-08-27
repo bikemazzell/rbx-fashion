@@ -191,7 +191,7 @@ export function ParentSettingsSheet({
   return (
     <SheetBackdrop label="Parent Settings">
       <h2 class="sheet-title">Parent Settings</h2>
-      <p class="sheet-text">The key stays on this device only until the page is closed or forgotten.</p>
+      <p class="sheet-text">The key is kept in memory for this session only and is sent to the pattern service when your child generates a picture.</p>
       <label class="field">
         <span class="field-label">Gemini API key</span>
         <input

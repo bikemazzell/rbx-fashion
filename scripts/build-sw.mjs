@@ -127,7 +127,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((ks) =>
-      Promise.all(ks.filter((k) => k !== PRECACHE + VERSION).map((k) => caches.delete(k))),
+      Promise.all(
+        ks
+          .filter((k) => k.startsWith(PRECACHE) && k !== PRECACHE + VERSION)
+          .map((k) => caches.delete(k)),
+      ),
     ),
   );
 });
