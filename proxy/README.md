@@ -49,27 +49,34 @@ Preflight `OPTIONS` from an allowed origin gets `204` with
 
 - CORS: exact string match against the allowlist — no suffix, substring, or
   wildcard matching. Disallowed or missing `Origin` gets `403` and no ACAO.
+- Route: only `POST` requests whose path is `/api/patterns` (an exact match or
+  a `/api/patterns` suffix behind a mount prefix) are served; anything else
+  gets `404 not-found` after the origin check.
 - Request body: 4 KiB hard cap (declared `Content-Length` and streamed bytes
   are both enforced); the Node adapter additionally caps reads at 64 KiB.
 - Prompt: 1–500 Unicode code points (`[...prompt].length`), JSON only.
 - Upstream timeout: 60 s (`timeoutMs` option).
 - Upstream response: 10 MiB cap, stream-enforced (`maxResponseBytes` option).
 - Upstream image must be `image/png` `inlineData` passing PNG signature +
-  `IHDR` validation, otherwise the client sees `invalid-image`.
+  `IHDR` validation (13-byte IHDR chunk with width/height ≥ 1), otherwise the
+  client sees `invalid-image`.
 
 ## Redaction guarantee
 
 Every failure returns a normalized JSON body
 `{"error":{"code":"<category>","message":"<fixed message>"}` with fixed
-messages. Responses never echo the prompt, the API key, the caller origin,
-the upstream status text, or the upstream body. The proxy keeps no state
+messages. Response bodies never echo the prompt, the API key, the caller
+origin, the upstream status text, or the upstream body. One deliberate
+exception outside the body: the `Access-Control-Allow-Origin` response header
+echoes the caller's origin, but only after that exact origin matched the
+allowlist — it never reflects an unknown origin. The proxy keeps no state
 beyond a single in-flight request, writes nothing to disk, and logs nothing
 (request contents are never logged; the only stderr output is the startup
 error when `PATTERN_ALLOWED_ORIGINS` is missing).
 
-Error categories: `invalid-origin`, `method-not-allowed`, `payload-too-large`,
-`unsupported-media-type`, `invalid-prompt`, `missing-key`, `upstream-error`,
-`upstream-timeout`, `upstream-too-large`, `invalid-image`.
+Error categories: `invalid-origin`, `method-not-allowed`, `not-found`,
+`payload-too-large`, `unsupported-media-type`, `invalid-prompt`, `missing-key`,
+`upstream-error`, `upstream-timeout`, `upstream-too-large`, `invalid-image`.
 
 ## Model configurability — verify before deploy
 

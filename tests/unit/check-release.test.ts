@@ -34,10 +34,10 @@ function pngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, crc]);
 }
 
-function minimalPng(): Buffer {
+function evidencePng(width: number, height: number): Buffer {
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(1, 0);
-  ihdr.writeUInt32BE(1, 4);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
   return Buffer.concat([PNG_SIGNATURE, pngChunk("IHDR", ihdr), pngChunk("IEND", Buffer.alloc(0))]);
 }
@@ -107,13 +107,18 @@ function writeEvidenceTree(root: string, checklistText: string): void {
   mkdirSync(join(root, "src", "domain"), { recursive: true });
   writeFileSync(join(root, "calibration", "evidence", "r6-checklist-completed.md"), checklistText);
   writeFileSync(join(root, "calibration", "evidence", "measurements.json"), validMeasurements());
-  const png = minimalPng();
+  const CAPTURE_DIMENSIONS: Record<(typeof GARMENTS)[number], [number, number]> = {
+    shirt: [585, 559],
+    pants: [585, 559],
+    tshirt: [512, 512],
+  };
   for (const garment of GARMENTS) {
+    const [width, height] = CAPTURE_DIMENSIONS[garment];
     for (const source of SOURCES) {
       for (const view of VIEWS) {
         writeFileSync(
           join(root, "calibration", "evidence", "captures", `${garment}-${source}-${view}.png`),
-          png,
+          evidencePng(width, height),
         );
       }
     }
@@ -162,6 +167,42 @@ test("checklist still saying RESULT: PENDING fails naming the checklist", () => 
   const root = mkdtempSync(join(tmpdir(), "rbx-check-release-"));
   try {
     writeEvidenceTree(root, `${pending}\n`);
+    const result = runReleaseCheck(root);
+    expect(result.ok).toBe(false);
+    expect(
+      result.failures.some((failure) => failure.includes("r6-checklist-completed.md")),
+    ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a capture with the wrong dimensions fails naming the file", () => {
+  const template = readFileSync(join(repoRoot, "calibration", "r6-checklist.md"), "utf8");
+  const completed = fillResultCells(template).replace("RESULT: PENDING", "RESULT: PASS");
+  const root = mkdtempSync(join(tmpdir(), "rbx-check-release-"));
+  try {
+    writeEvidenceTree(root, `${completed}\n`);
+    writeFileSync(
+      join(root, "calibration", "evidence", "captures", "shirt-studio-front.png"),
+      evidencePng(1, 1),
+    );
+    const result = runReleaseCheck(root);
+    expect(result.ok).toBe(false);
+    expect(
+      result.failures.some((failure) => failure.includes("shirt-studio-front.png")),
+    ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a checklist reading RESULT: PASSING does not satisfy the gate", () => {
+  const template = readFileSync(join(repoRoot, "calibration", "r6-checklist.md"), "utf8");
+  const passing = fillResultCells(template).replace("RESULT: PENDING", "RESULT: PASSING");
+  const root = mkdtempSync(join(tmpdir(), "rbx-check-release-"));
+  try {
+    writeEvidenceTree(root, `${passing}\n`);
     const result = runReleaseCheck(root);
     expect(result.ok).toBe(false);
     expect(

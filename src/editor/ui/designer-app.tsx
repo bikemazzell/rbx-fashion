@@ -213,6 +213,7 @@ export function DesignerApp() {
 
   const startGarment = (garment: GarmentType) => {
     commitSession(createSession(garment));
+    assets.retainOnly([]);
     setSelectedItemId(null);
     setImportedMegapixels(0);
     resetTransient();
@@ -239,6 +240,7 @@ export function DesignerApp() {
       }
     }
     commitSession(next);
+    assets.retainOnly(next.document.assets.map((entry) => entry.id));
     setSelectedItemId(item === null ? null : topLayerId(next));
     setImportedMegapixels(item === null ? 0 : megapixels);
     resetTransient();
@@ -263,6 +265,7 @@ export function DesignerApp() {
 
   const goStartScreen = () => {
     commitSession(null);
+    assets.retainOnly([]);
     setSelectedItemId(null);
     setImportedMegapixels(0);
     resetTransient();
@@ -483,6 +486,7 @@ export function DesignerApp() {
     for (const asset of result.assets) {
       assets.add(asset);
     }
+    assets.retainOnly(result.document.assets.map((entry) => entry.id));
     commitSession(next);
     setSelectedItemId(topLayerId(next));
     setImportedMegapixels(

@@ -72,6 +72,12 @@ function checkMeasurements(evidenceDir, failures) {
   });
 }
 
+const CAPTURE_DIMENSIONS = {
+  shirt: [585, 559],
+  pants: [585, 559],
+  tshirt: [512, 512],
+};
+
 function checkCaptures(evidenceDir, source, failures) {
   for (const garment of GARMENTS) {
     for (const view of VIEWS) {
@@ -80,6 +86,15 @@ function checkCaptures(evidenceDir, source, failures) {
         const bytes = readFileSync(join(evidenceDir, "captures", `${garment}-${source}-${view}.png`));
         if (bytes.length === 0 || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
           failures.push(`${rel}: empty or missing PNG signature`);
+          continue;
+        }
+        const [expectedWidth, expectedHeight] = CAPTURE_DIMENSIONS[garment];
+        const width = bytes.readUInt32BE(16);
+        const height = bytes.readUInt32BE(20);
+        if (width !== expectedWidth || height !== expectedHeight) {
+          failures.push(
+            `${rel}: IHDR dimensions ${width}x${height} do not match expected ${expectedWidth}x${expectedHeight}`,
+          );
         }
       } catch {
         failures.push(`${rel}: missing or unreadable`);
@@ -96,8 +111,8 @@ function checkChecklist(evidenceDir, failures) {
     return;
   }
   const text = file.text;
-  if (!text.includes("RESULT: PASS")) {
-    failures.push(`${rel}: must contain "RESULT: PASS"`);
+  if (!/^RESULT: PASS$/m.test(text)) {
+    failures.push(`${rel}: must contain an exact "RESULT: PASS" line`);
   }
   if (text.includes("RESULT: FAIL")) {
     failures.push(`${rel}: contains "RESULT: FAIL" — a failed check must be resolved and the calibration repeated`);

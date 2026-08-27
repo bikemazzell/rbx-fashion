@@ -31,21 +31,31 @@ export function patternPromptLength(prompt: string): number {
 }
 
 function isPng(bytes: Uint8Array): boolean {
-  return (
-    bytes.length >= 16 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a &&
-    bytes[12] === 0x49 &&
-    bytes[13] === 0x48 &&
-    bytes[14] === 0x44 &&
-    bytes[15] === 0x52
-  );
+  if (bytes.length < 24) {
+    return false;
+  }
+  if (
+    bytes[0] !== 0x89 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x4e ||
+    bytes[3] !== 0x47 ||
+    bytes[4] !== 0x0d ||
+    bytes[5] !== 0x0a ||
+    bytes[6] !== 0x1a ||
+    bytes[7] !== 0x0a
+  ) {
+    return false;
+  }
+  const ihdrLength = (bytes[8]! << 24) | (bytes[9]! << 16) | (bytes[10]! << 8) | bytes[11]!;
+  if (ihdrLength !== 13) {
+    return false;
+  }
+  if (bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52) {
+    return false;
+  }
+  const width = (bytes[16]! << 24) | (bytes[17]! << 16) | (bytes[18]! << 8) | bytes[19]!;
+  const height = (bytes[20]! << 24) | (bytes[21]! << 16) | (bytes[22]! << 8) | bytes[23]!;
+  return width >= 1 && height >= 1;
 }
 
 function raceAbort(promise: Promise<Response>, signal: AbortSignal): Promise<Response> {

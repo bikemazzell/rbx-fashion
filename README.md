@@ -35,7 +35,7 @@ The AI pattern generator requires an operator-supplied proxy runtime, deployed s
 
 ## Release gates
 
-`npm run check:release` verifies the R6 calibration evidence: `calibration/evidence/measurements.json` with the required fields, all 36 capture PNGs (3 garments × 2 sources × 6 views), the completed checklist at `calibration/evidence/r6-checklist-completed.md`, and a registry `calibrationVersion` recorded from a passing calibration. Producing that evidence requires manual Roblox Studio work per the procedure in `calibration/README.md`, so `check:release` fails until that evidence exists — by design — and CI deliberately excludes it.
+`npm run check:release` verifies the R6 calibration evidence: `calibration/evidence/measurements.json` with the required fields, all 36 capture PNGs (3 garments × 2 sources × 6 views, each with IHDR dimensions matching the template — 585×559 for shirt/pants, 512×512 for the T-shirt), the completed checklist at `calibration/evidence/r6-checklist-completed.md`, and a registry `calibrationVersion` recorded from a passing calibration. Producing that evidence requires manual Roblox Studio work per the procedure in `calibration/README.md`, so `check:release` fails until that evidence exists — by design — and CI deliberately excludes it.
 
 Also manual external gates before a real release, outside CI: physical iOS Safari and Android Chrome editing/export smoke tests, and one Roblox Studio/Creator Dashboard upload test per garment.
 

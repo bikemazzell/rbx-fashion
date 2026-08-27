@@ -52,6 +52,7 @@ interface RequestExtras {
   contentType?: string | null;
   contentLength?: string | null;
   apiKey?: string | null;
+  url?: string;
 }
 
 function postRequest(body: string | ReadableStream<Uint8Array>, extras: RequestExtras = {}): Request {
@@ -70,11 +71,11 @@ function postRequest(body: string | ReadableStream<Uint8Array>, extras: RequestE
     headers["x-gemini-api-key"] = extras.apiKey ?? API_KEY;
   }
   if (typeof body === "string") {
-    return new Request(PROXY_URL, { method: "POST", headers, body });
+    return new Request(extras.url ?? PROXY_URL, { method: "POST", headers, body });
   }
   const init: RequestInit = { method: "POST", headers, body, redirect: "manual" };
   (init as { duplex?: "half" }).duplex = "half";
-  return new Request(PROXY_URL, init);
+  return new Request(extras.url ?? PROXY_URL, init);
 }
 
 function validBody(prompt: string): string {
@@ -583,4 +584,63 @@ test("every error response is redacted: no prompt, key, origin, or upstream body
     expect(text).not.toContain(ALLOWED_ORIGIN);
     expect(text).not.toContain("https://app.example.com");
   }
+});
+
+function malformedPngBase64(lengthField: number, width: number, height: number): string {
+  const bytes: number[] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  bytes.push((lengthField >>> 24) & 0xff, (lengthField >>> 16) & 0xff, (lengthField >>> 8) & 0xff, lengthField & 0xff);
+  bytes.push(0x49, 0x48, 0x44, 0x52);
+  bytes.push((width >>> 24) & 0xff, (width >>> 16) & 0xff, (width >>> 8) & 0xff, width & 0xff);
+  bytes.push((height >>> 24) & 0xff, (height >>> 16) & 0xff, (height >>> 8) & 0xff, height & 0xff);
+  bytes.push(8, 0, 0, 0, 0);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+test("a POST to a path other than /api/patterns is rejected 404 without an upstream call", async () => {
+  const upstreamFetch = vi.fn();
+  const response = await handlePatternRequest(
+    postRequest(validBody(PROMPT), { url: "https://proxy.example.test/other" }),
+    options({ upstreamFetch: upstreamFetch as unknown as typeof fetch }),
+  );
+  expect(response.status).toBe(404);
+  const error = await errorBody(response);
+  expect(error.code).toBe("not-found");
+  expect(error.text).not.toContain(PROMPT);
+  expect(error.text).not.toContain(API_KEY);
+  expect(upstreamFetch).not.toHaveBeenCalled();
+});
+
+test("a POST whose path ends with /api/patterns behind a prefix is accepted", async () => {
+  const response = await handlePatternRequest(
+    postRequest(validBody(PROMPT), { url: "https://proxy.example.test/prefix/api/patterns" }),
+    options(),
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
+});
+
+test("an upstream PNG with a zero width is rejected as invalid-image", async () => {
+  const fetchImpl = vi.fn(async () =>
+    new Response(
+      upstreamJson({ mimeType: "image/png", data: malformedPngBase64(13, 0, 1) }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  ) as unknown as typeof fetch;
+  const response = await handlePatternRequest(postRequest(validBody(PROMPT)), options({ upstreamFetch: fetchImpl }));
+  expect(response.status).toBe(502);
+  const error = await errorBody(response);
+  expect(error.code).toBe("invalid-image");
+});
+
+test("an upstream PNG with a non-13-byte IHDR length is rejected as invalid-image", async () => {
+  const fetchImpl = vi.fn(async () =>
+    new Response(
+      upstreamJson({ mimeType: "image/png", data: malformedPngBase64(12, 1, 1) }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  ) as unknown as typeof fetch;
+  const response = await handlePatternRequest(postRequest(validBody(PROMPT)), options({ upstreamFetch: fetchImpl }));
+  expect(response.status).toBe(502);
+  const error = await errorBody(response);
+  expect(error.code).toBe("invalid-image");
 });

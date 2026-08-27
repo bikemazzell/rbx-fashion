@@ -82,6 +82,19 @@ test("a 500 response maps to upstream with the failed message", async () => {
   expect(outcome).toEqual({ ok: false, kind: "upstream", message: GENERATE_FAILED_MESSAGE });
 });
 
+test("a 200 response with a PNG signature but a zero width maps to invalid-image", async () => {
+  const bytes = pngBytes();
+  bytes[16] = 0;
+  bytes[17] = 0;
+  bytes[18] = 0;
+  bytes[19] = 0;
+  const fetchImpl = vi.fn(
+    async () => new Response(bytes, { status: 200, headers: { "content-type": "image/png" } }),
+  ) as unknown as typeof fetch;
+  const outcome = await generatePattern(input({ fetchImpl }));
+  expect(outcome).toEqual({ ok: false, kind: "invalid-image", message: GENERATE_FAILED_MESSAGE });
+});
+
 test("a 200 response with a non-PNG body maps to invalid-image", async () => {
   const fetchImpl = vi.fn(async () => new Response("not a png", { status: 200 })) as unknown as typeof fetch;
   const outcome = await generatePattern(input({ fetchImpl }));

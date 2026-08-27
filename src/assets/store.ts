@@ -27,6 +27,15 @@ export class AssetStore {
     return this.assets.has(id);
   }
 
+  retainOnly(ids: Iterable<string>): void {
+    const keep = new Set(ids);
+    for (const id of this.assets.keys()) {
+      if (!keep.has(id)) {
+        this.assets.delete(id);
+      }
+    }
+  }
+
   get size(): number {
     return this.assets.size;
   }

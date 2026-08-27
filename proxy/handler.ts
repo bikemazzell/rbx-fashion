@@ -18,6 +18,7 @@ const MAX_PROMPT_CODE_POINTS = 500;
 type PatternErrorCode =
   | "invalid-origin"
   | "method-not-allowed"
+  | "not-found"
   | "payload-too-large"
   | "unsupported-media-type"
   | "invalid-prompt"
@@ -30,6 +31,7 @@ type PatternErrorCode =
 const ERROR_MESSAGES: Record<PatternErrorCode, string> = {
   "invalid-origin": "This origin is not allowed to use the pattern service.",
   "method-not-allowed": "Only POST and OPTIONS requests are supported.",
+  "not-found": "This pattern service route was not found.",
   "payload-too-large": "The request body is too large.",
   "unsupported-media-type": "The request content type must be application/json.",
   "invalid-prompt": "The prompt must be 1 to 500 Unicode code points.",
@@ -126,21 +128,31 @@ function base64ToBytes(encoded: string): Uint8Array<ArrayBuffer> | null {
 }
 
 function hasPngSignature(bytes: Uint8Array): boolean {
-  return (
-    bytes.length >= 16 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a &&
-    bytes[12] === 0x49 &&
-    bytes[13] === 0x48 &&
-    bytes[14] === 0x44 &&
-    bytes[15] === 0x52
-  );
+  if (bytes.length < 24) {
+    return false;
+  }
+  if (
+    bytes[0] !== 0x89 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x4e ||
+    bytes[3] !== 0x47 ||
+    bytes[4] !== 0x0d ||
+    bytes[5] !== 0x0a ||
+    bytes[6] !== 0x1a ||
+    bytes[7] !== 0x0a
+  ) {
+    return false;
+  }
+  const ihdrLength = (bytes[8]! << 24) | (bytes[9]! << 16) | (bytes[10]! << 8) | bytes[11]!;
+  if (ihdrLength !== 13) {
+    return false;
+  }
+  if (bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52) {
+    return false;
+  }
+  const width = (bytes[16]! << 24) | (bytes[17]! << 16) | (bytes[18]! << 8) | bytes[19]!;
+  const height = (bytes[20]! << 24) | (bytes[21]! << 16) | (bytes[22]! << 8) | bytes[23]!;
+  return width >= 1 && height >= 1;
 }
 
 function findPngInlineData(data: unknown): string | null {
@@ -197,6 +209,11 @@ export async function handlePatternRequest(
     return errorResponse(403, "invalid-origin", null);
   }
   const allowedOrigin = origin;
+
+  const pathname = new URL(request.url).pathname;
+  if (pathname !== "/api/patterns" && !pathname.endsWith("/api/patterns")) {
+    return errorResponse(404, "not-found", allowedOrigin);
+  }
 
   const declaredLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
