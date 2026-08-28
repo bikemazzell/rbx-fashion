@@ -1,16 +1,20 @@
 import type { GarmentType } from "../../domain/types";
 
-const CARDS: readonly { garment: GarmentType; label: string }[] = [
-  { garment: "tshirt", label: "T-Shirt" },
-  { garment: "shirt", label: "Shirt" },
-  { garment: "pants", label: "Pants" },
+const CARDS: readonly { garment: GarmentType; label: string; description: string }[] = [
+  { garment: "tshirt", label: "T-Shirt", description: "A picture on the front" },
+  { garment: "shirt", label: "Shirt", description: "Wraps the body and arms" },
+  { garment: "pants", label: "Pants", description: "Covers the waist and legs" },
 ];
 
 export function StartScreen({
   onChoose,
+  onOpen,
+  notice,
   onParentSettings,
 }: {
   onChoose: (garment: GarmentType) => void;
+  onOpen: () => void;
+  notice: string | null;
   onParentSettings?: () => void;
 }) {
   return (
@@ -28,9 +32,23 @@ export function StartScreen({
           >
             <span class={`garment-shape garment-shape-${card.garment}`} aria-hidden="true" />
             <span class="garment-card-label">{card.label}</span>
+            <span class="garment-card-description">{card.description}</span>
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        class="start-open-button"
+        aria-label="Open Saved Project"
+        onClick={onOpen}
+      >
+        Open Saved Project
+      </button>
+      {notice !== null && (
+        <p class="start-notice" role="status">
+          {notice}
+        </p>
+      )}
       {onParentSettings !== undefined && (
         <footer class="start-footer">
           <button type="button" class="start-footer-button" aria-label="Parent Settings" onClick={onParentSettings}>

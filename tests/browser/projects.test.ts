@@ -712,6 +712,54 @@ test("a picture imported through the UI survives save and reopen with its asset 
   expect(namesAfterReopen).toEqual(["Picture 1"]);
 }, 15000);
 
+test("Open Saved Project opens a valid archive without starting a throwaway garment", async () => {
+  const host = mountApp();
+  const { document, assets } = await garmentProject("pants");
+  const saved = await saveProject(document, (id) => {
+    const asset = assets.get(id);
+    if (asset === undefined) {
+      throw new Error(`missing asset ${id}`);
+    }
+    return asset.bytes;
+  });
+  expect(saved.ok).toBe(true);
+  if (!saved.ok) {
+    return;
+  }
+
+  const inputClickSpy = vi
+    .spyOn(HTMLInputElement.prototype, "click")
+    .mockImplementation(() => {});
+  try {
+    (byLabel(host, "Open Saved Project") as HTMLButtonElement).click();
+    expect(inputClickSpy).toHaveBeenCalledTimes(1);
+  } finally {
+    inputClickSpy.mockRestore();
+  }
+  await chooseOpenFile(host, new File([saved.blob], "saved.rbxcloth.zip", {
+    type: "application/zip",
+  }));
+  await waitFor(
+    () => host.querySelector(".project-name")?.textContent === document.name,
+    "saved project opens from start",
+  );
+  expect(await itemNames(host)).toEqual(["Picture 1", "Color 1"]);
+}, 15000);
+
+test("an invalid welcome-screen project leaves garment choices visible and explains the error", async () => {
+  const host = mountApp();
+  await chooseOpenFile(
+    host,
+    new File([new Uint8Array([1, 2, 3])], "broken.zip", { type: "application/zip" }),
+  );
+  await waitFor(
+    () => host.querySelector('[role="status"]')?.textContent?.includes("can't be opened") === true,
+    "welcome open error",
+  );
+  expect(byLabel(host, "Shirt")).toBeTruthy();
+  expect(host.querySelector(".project-name")).toBeNull();
+}, 15000);
+
 interface SavedProject {
   name: string;
   layers: { kind: string; assetId?: string; placement: string }[];

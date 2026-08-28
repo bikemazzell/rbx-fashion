@@ -223,6 +223,10 @@ test("start screen offers three garments and a fresh editor starts empty with di
   for (const label of ["T-Shirt", "Shirt", "Pants"]) {
     expect(byLabel(host, label)).toBeTruthy();
   }
+  expect(host.textContent).toContain("A picture on the front");
+  expect(host.textContent).toContain("Wraps the body and arms");
+  expect(host.textContent).toContain("Covers the waist and legs");
+  expect(byLabel(host, "Open Saved Project")).toBeTruthy();
   (byLabel(host, "Shirt") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
   expect(requireEl(host.querySelector(".project-name"), "project name").textContent).toBe("My Shirt");

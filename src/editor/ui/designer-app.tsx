@@ -478,6 +478,7 @@ export function DesignerApp() {
   const requestOpen = () => {
     const current = sessionRef.current;
     if (current === null) {
+      openFileInputRef.current?.click();
       return;
     }
     if (current.dirty) {
@@ -495,9 +496,6 @@ export function DesignerApp() {
       return;
     }
     const captured = sessionRef.current;
-    if (captured === null) {
-      return;
-    }
     const result = await openProject(file);
     if (sessionRef.current !== captured) {
       return;
@@ -734,6 +732,8 @@ export function DesignerApp() {
       <>
         <StartScreen
           onChoose={startGarment}
+          onOpen={requestOpen}
+          notice={notice}
           onParentSettings={generateEnabled ? () => setParentSheetOpen(true) : undefined}
         />
         {parentSheetOpen && (
@@ -744,6 +744,13 @@ export function DesignerApp() {
             onClose={() => setParentSheetOpen(false)}
           />
         )}
+        <input
+          ref={openFileInputRef}
+          type="file"
+          accept=".rbxcloth.zip,.zip,application/zip"
+          hidden
+          onChange={onOpenFile}
+        />
       </>
     );
   }
