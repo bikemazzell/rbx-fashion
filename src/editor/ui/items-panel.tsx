@@ -1,5 +1,5 @@
 import type { Layer } from "../../domain/types";
-import { IconDown, IconDuplicate, IconEye, IconTrash, IconUp } from "./icons";
+import { IconDown, IconDuplicate, IconEye, IconEyeOff, IconTrash, IconUp } from "./icons";
 
 export interface ItemsPanelProps {
   layersTopFirst: readonly Layer[];
@@ -51,20 +51,21 @@ export function ItemsPanel(props: ItemsPanelProps) {
             />
             <button
               type="button"
-              class="item-tool"
+              class="item-tool item-tool-visibility"
               aria-label={layer.visible ? "Hide" : "Show"}
               aria-pressed={layer.visible}
               onClick={() => props.onToggleVisibility(layer.id)}
             >
-              <IconEye />
+              {layer.visible ? <IconEye /> : <IconEyeOff />}
             </button>
             <button
               type="button"
-              class="item-tool"
-              aria-label="Duplicate"
+              class="item-tool item-tool-copy"
+              aria-label="Copy item"
               onClick={() => props.onDuplicate(layer.id)}
             >
               <IconDuplicate />
+              <span class="item-tool-label">Copy</span>
             </button>
             <button
               type="button"

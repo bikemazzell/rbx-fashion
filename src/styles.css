@@ -604,6 +604,27 @@ button {
   height: 20px;
 }
 
+.item-tool-visibility[aria-pressed="false"] {
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+.item-tool-copy {
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1;
+}
+
+.item-tool-copy svg {
+  width: 17px;
+  height: 17px;
+}
+
+.item-tool-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
 .item-tool-delete {
   color: #b3261e;
 }

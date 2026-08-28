@@ -61,6 +61,14 @@ export function IconEye(): JSX.Element {
   return strokeIcon(["M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z", "M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"]);
 }
 
+export function IconEyeOff(): JSX.Element {
+  return strokeIcon([
+    "M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z",
+    "M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z",
+    "M3 3l18 18",
+  ]);
+}
+
 export function IconDuplicate(): JSX.Element {
   return strokeIcon(["M9 9h11v11H9z", "M5 15V4h11"]);
 }

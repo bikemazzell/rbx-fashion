@@ -292,7 +292,34 @@ test("items sheet supports rename, duplicate, visibility, reorder, and delete", 
   await startEditing(host, "Shirt");
   await addColor(host, 0);
   await openItems(host);
-  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Duplicate"]'), "duplicate") as HTMLButtonElement).click();
+  const firstRow = requireEl(itemRows(host)[0], "first item row");
+  const visibleEye = requireEl(
+    firstRow.querySelector<HTMLButtonElement>('[aria-label="Hide"]'),
+    "visible eye",
+  );
+  expect(visibleEye.getAttribute("aria-pressed")).toBe("true");
+  expect(visibleEye.querySelector('path[d="M3 3l18 18"]')).toBeNull();
+  visibleEye.click();
+  await waitFor(() => firstRow.querySelector('[aria-label="Show"]') !== null, "hidden eye state");
+  const hiddenEye = requireEl(
+    firstRow.querySelector<HTMLButtonElement>('[aria-label="Show"]'),
+    "hidden eye",
+  );
+  expect(hiddenEye.getAttribute("aria-pressed")).toBe("false");
+  expect(hiddenEye.querySelector('path[d="M3 3l18 18"]')).not.toBeNull();
+  expect(Number.parseFloat(getComputedStyle(hiddenEye).opacity)).toBeLessThan(0.6);
+  hiddenEye.click();
+  await waitFor(() => firstRow.querySelector('[aria-label="Hide"]') !== null, "visible eye restored");
+
+  const firstCopy = requireEl(
+    firstRow.querySelector<HTMLButtonElement>('[aria-label="Copy item"]'),
+    "copy item",
+  );
+  expect((firstCopy.textContent ?? "").trim()).toBe("Copy");
+  expect(firstCopy.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+  expect(firstCopy.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+  expect(firstRow.scrollWidth).toBeLessThanOrEqual(firstRow.clientWidth);
+  firstCopy.click();
   await waitFor(() => itemRows(host).length === 2, "second item");
   expect(itemNames(host)).toEqual(["Color 2", "Color 1"]);
 
@@ -309,7 +336,7 @@ test("items sheet supports rename, duplicate, visibility, reorder, and delete", 
   await waitFor(() => itemNames(host)[1] === "My Red", "rename redo");
 
   const renameRow = itemRows(host)[1];
-  (requireEl(renameRow?.querySelector('[aria-label="Duplicate"]'), "duplicate") as HTMLButtonElement).click();
+  (requireEl(renameRow?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
   await waitFor(() => itemRows(host).length === 3, "duplicate adds item");
   expect(itemNames(host)).toEqual(["Color 3", "Color 2", "My Red"]);
 
@@ -351,11 +378,11 @@ test("ninth add is refused with a friendly message", async () => {
   await addColor(host, 0);
   await openItems(host);
   for (let index = 1; index < 8; index += 1) {
-    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Duplicate"]'), "duplicate") as HTMLButtonElement).click();
+    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
     await waitFor(() => itemRows(host).length === index + 1, `item ${index + 1}`);
   }
   expect(itemRows(host)).toHaveLength(8);
-  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Duplicate"]'), "duplicate") as HTMLButtonElement).click();
+  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
   await waitFor(() => statusText(host).includes(ITEM_CAP_MESSAGE), "cap message");
   expect(itemRows(host)).toHaveLength(8);
 }, 20000);
@@ -780,10 +807,10 @@ test("a successful edit clears the sticky notice", async () => {
   await addColor(host, 0);
   await openItems(host);
   for (let index = 1; index < 8; index += 1) {
-    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Duplicate"]'), "duplicate") as HTMLButtonElement).click();
+    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
     await waitFor(() => itemRows(host).length === index + 1, `item ${index + 1}`);
   }
-  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Duplicate"]'), "duplicate") as HTMLButtonElement).click();
+  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
   await waitFor(() => statusText(host).includes(ITEM_CAP_MESSAGE), "cap message");
   (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Delete"]'), "delete") as HTMLButtonElement).click();
   await waitFor(() => statusText(host) === "", "notice cleared after delete");

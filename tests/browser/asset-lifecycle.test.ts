@@ -198,7 +198,7 @@ test("a cap-rejected picture import closes the orphaned bitmaps and keeps the ca
   for (let index = 0; index < 7; index += 1) {
     (byLabel(host, "Items") as HTMLButtonElement).click();
     await waitFor(() => host.querySelector('[role="dialog"][aria-label="Items"]') !== null, "items sheet");
-    const duplicates = host.querySelectorAll('[aria-label="Duplicate"]');
+    const duplicates = host.querySelectorAll('[aria-label="Copy item"]');
     (duplicates[0] as HTMLButtonElement).click();
     await waitFor(() => host.querySelectorAll(".item-row").length === index + 2, "duplicate lands");
     byLabel(host, "Done").click();
