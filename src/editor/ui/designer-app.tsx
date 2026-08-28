@@ -80,6 +80,18 @@ function topLayerId(session: EditorSession): string | null {
   return top?.id ?? null;
 }
 
+function useMediaQuery(queryText: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(queryText).matches);
+  useEffect(() => {
+    const query = window.matchMedia(queryText);
+    const onChange = () => setMatches(query.matches);
+    onChange();
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, [queryText]);
+  return matches;
+}
+
 export function DesignerApp() {
   const [session, setSession] = useState<EditorSession | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -94,9 +106,8 @@ export function DesignerApp() {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [parentSheetOpen, setParentSheetOpen] = useState(false);
   const generateEnabled = PATTERN_PROXY_URL !== undefined && PATTERN_PROXY_URL.length > 0;
-  const [desktop, setDesktop] = useState(() =>
-    window.matchMedia("(min-width: 1024px) and (pointer: fine)").matches,
-  );
+  const desktop = useMediaQuery("(min-width: 1024px) and (pointer: fine)");
+  const dualPane = useMediaQuery("(min-width: 700px) and (orientation: landscape)");
   const assetsRef = useRef<AssetStore | null>(null);
   if (assetsRef.current === null) {
     assetsRef.current = new AssetStore();
@@ -125,13 +136,6 @@ export function DesignerApp() {
     commitSession(next);
     return true;
   };
-
-  useEffect(() => {
-    const query = window.matchMedia("(min-width: 1024px) and (pointer: fine)");
-    const onChange = () => setDesktop(query.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
 
   const sessionDirty = session !== null && session.dirty;
   useEffect(() => {
@@ -753,6 +757,7 @@ export function DesignerApp() {
         layersTopFirst={layersTopFirst}
         activeTab={activeTab}
         desktop={desktop}
+        dualPane={dualPane}
         sheet={sheet}
         pendingStartOpen={pendingStart !== null}
         unsavedVariant={pendingStart !== null && pendingStart.go === "open-file" ? "open" : "new"}

@@ -209,17 +209,25 @@ export function Workspace(props: WorkspaceProps) {
     if (stage === null || canvas === null || overlay === null) {
       return;
     }
-    const sync = () => {
+    let syncFrame = 0;
+    const syncNow = () => {
+      syncFrame = 0;
       overlay.style.left = `${canvas.offsetLeft}px`;
       overlay.style.top = `${canvas.offsetTop}px`;
       overlay.style.width = `${canvas.offsetWidth}px`;
       overlay.style.height = `${canvas.offsetHeight}px`;
     };
-    const observer = new ResizeObserver(sync);
+    const scheduleSync = () => {
+      if (syncFrame === 0) syncFrame = requestAnimationFrame(syncNow);
+    };
+    const observer = new ResizeObserver(scheduleSync);
     observer.observe(canvas);
     observer.observe(stage);
-    sync();
-    return () => observer.disconnect();
+    scheduleSync();
+    return () => {
+      observer.disconnect();
+      if (syncFrame !== 0) cancelAnimationFrame(syncFrame);
+    };
   }, []);
 
   useEffect(() => {

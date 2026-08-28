@@ -759,6 +759,7 @@ test("double-tapping export triggers one download", async () => {
 
 const VIEWPORTS: readonly [string, number, number][] = [
   ["portrait-phone", 390, 844],
+  ["small-landscape-phone", 667, 375],
   ["landscape-phone", 844, 390],
   ["portrait-tablet", 768, 1024],
   ["desktop", 1440, 900],
@@ -792,9 +793,36 @@ test("toolbar stays 44px and axe reports zero violations across the viewport mat
       expect(previewPane.offsetParent, `${name} preview hidden`).toBeNull();
       expect(host.querySelector(".items-rail"), `${name} no rail`).toBeNull();
     }
+    if (name === "small-landscape-phone") {
+      expect(tabbar.offsetParent, `${name} tabbar visible`).not.toBeNull();
+      expect(previewPane.offsetParent, `${name} preview hidden in Edit`).toBeNull();
+      const workspace = requireEl(
+        host.querySelector<HTMLElement>(".workspace-stage"),
+        "workspace stage",
+      );
+      expect(workspace.getBoundingClientRect().height).toBeGreaterThan(80);
+      expect(toolbar.getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight + 1);
+      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight + 1);
+    }
     if (name === "landscape-phone") {
       expect(tabbar.offsetParent, `${name} tabbar hidden`).toBeNull();
-      expect(previewPane.offsetParent, `${name} preview visible`).not.toBeNull();
+      expect(previewPane.offsetParent, `${name} preview pane visible`).not.toBeNull();
+      await waitFor(
+        () => host.querySelector(".preview-stage") !== null,
+        `${name} preview stage mounted`,
+      );
+      const workspace = requireEl(
+        host.querySelector<HTMLElement>(".workspace-stage"),
+        "workspace stage",
+      );
+      const preview = requireEl(
+        host.querySelector<HTMLElement>(".preview-stage"),
+        "preview stage",
+      );
+      expect(workspace.getBoundingClientRect().height).toBeGreaterThan(80);
+      expect(preview.getBoundingClientRect().height).toBeGreaterThan(80);
+      expect(toolbar.getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight + 1);
+      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight + 1);
     }
     if (name === "desktop") {
       expect(host.querySelector(".items-rail"), `${name} rail present`).not.toBeNull();

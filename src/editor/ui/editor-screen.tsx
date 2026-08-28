@@ -43,6 +43,7 @@ export interface EditorScreenProps {
   layersTopFirst: readonly Layer[];
   activeTab: TabKind;
   desktop: boolean;
+  dualPane: boolean;
   sheet: SheetKind;
   pendingStartOpen: boolean;
   unsavedVariant: "new" | "open";
@@ -203,7 +204,7 @@ export function EditorScreen(props: EditorScreenProps) {
               garment={doc.garmentType}
               document={doc}
               assets={props.assets}
-              active={props.desktop || props.activeTab === "preview"}
+              active={props.desktop || props.dualPane || props.activeTab === "preview"}
             />
           </section>
         </div>

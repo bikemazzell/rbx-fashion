@@ -109,6 +109,7 @@ button {
 }
 
 .app-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -159,6 +160,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .panes {
@@ -166,6 +168,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .pane {
@@ -173,6 +176,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .pane-preview {
@@ -239,6 +243,7 @@ button {
   position: relative;
   flex: 1;
   min-height: 240px;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -263,6 +268,7 @@ button {
   position: relative;
   flex: 1;
   min-height: 240px;
+  min-width: 0;
   margin: 0.5rem 0.75rem;
   border-radius: 1rem;
   overflow: hidden;
@@ -319,6 +325,7 @@ button {
 }
 
 .notice-area {
+  flex: 0 0 auto;
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
@@ -335,6 +342,7 @@ button {
 }
 
 .tabbar {
+  flex: 0 0 auto;
   display: flex;
   gap: 0.25rem;
   padding: 0.25rem 0.75rem 0;
@@ -356,6 +364,7 @@ button {
 }
 
 .toolbar {
+  flex: 0 0 auto;
   display: flex;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
@@ -635,6 +644,24 @@ button {
 
 .items-rail {
   display: none;
+}
+
+@media (orientation: landscape) {
+  .app {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .panes,
+  .pane {
+    overflow: hidden;
+  }
+
+  .workspace-stage,
+  .preview-stage {
+    min-height: 0;
+  }
 }
 
 @media (min-width: 700px) and (orientation: landscape) {

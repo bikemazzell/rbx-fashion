@@ -142,9 +142,17 @@ export function createPreview(container: HTMLElement, options: PreviewOptions): 
     camera.updateProjectionMatrix();
     scheduleRender();
   };
-  const observer = new ResizeObserver(resize);
+  let resizeFrame = 0;
+  const scheduleResize = (): void => {
+    if (resizeFrame !== 0 || disposed || contextLost) return;
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      resize();
+    });
+  };
+  const observer = new ResizeObserver(scheduleResize);
   observer.observe(container);
-  resize();
+  scheduleResize();
 
   const pointers = new Map<number, PointerPoint>();
   let pinchStartDistance = 0;
@@ -271,6 +279,10 @@ export function createPreview(container: HTMLElement, options: PreviewOptions): 
       }
       disposed = true;
       cancelFrame();
+      if (resizeFrame !== 0) {
+        cancelAnimationFrame(resizeFrame);
+        resizeFrame = 0;
+      }
       observer.disconnect();
       domElement.removeEventListener("pointerdown", onPointerDown);
       domElement.removeEventListener("pointermove", onPointerMove);
