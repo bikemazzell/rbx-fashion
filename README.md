@@ -2,6 +2,13 @@
 
 Lean, mobile-first editor for designing Roblox classic clothing (shirt/pants templates) for children aged 8-10, with a template compositor, lazy-loaded R6 3D preview, and parent-gated AI pattern generation. Built with Preact + Vite + TypeScript; the app never persists project content or keys to browser storage.
 
+## Editor controls
+
+- Start with T-Shirt for a front-only picture, Shirt for body-and-arm wrapping, or Pants for waist-and-leg wrapping. Open Saved Project reopens a local `.rbxcloth.zip` without starting a new garment.
+- In Edit, drag a selected picture to move it, use its cyan handle to resize, its white handle to rotate, or use the mouse wheel/trackpad over the picture to resize it.
+- In Preview, drag to rotate the avatar and pinch or use the mouse wheel/trackpad to zoom. Reset restores the default view.
+- Save downloads an editable `.rbxcloth.zip`; Export downloads the Roblox-sized PNG. The app stores neither file nor API key after the browser session ends.
+
 ## Development
 
 Prerequisites: Node >= 22, then a one-time `npx playwright install chromium firefox webkit` for the browser-based suites.
