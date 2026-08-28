@@ -619,6 +619,21 @@ button {
   gap: 0.5rem;
 }
 
+.more-sheet {
+  overflow: hidden;
+}
+
+.more-sheet .more-form {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.more-sheet-done {
+  flex: 0 0 auto;
+  background: var(--surface);
+  box-shadow: 0 -0.5rem 0.75rem rgba(15, 18, 25, 0.08);
+}
+
 .field {
   display: flex;
   align-items: center;

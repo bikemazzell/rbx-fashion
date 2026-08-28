@@ -6,10 +6,30 @@ import { EXPORT_DISCLAIMER } from "../../project/export";
 import type { TransformPatch } from "../state";
 import { GENERATE_PARENT_SETUP_MESSAGE, PALETTE, PATTERN_IDEAS } from "./text";
 
-export function SheetBackdrop({ label, children }: { label: string; children: ComponentChildren }) {
+export function SheetBackdrop({
+  label,
+  children,
+  onDismiss,
+  sheetClass,
+}: {
+  label: string;
+  children: ComponentChildren;
+  onDismiss?: () => void;
+  sheetClass?: string;
+}) {
   return (
-    <div class="sheet-backdrop">
-      <div class="sheet" role="dialog" aria-modal="true" aria-label={label}>
+    <div
+      class="sheet-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onDismiss?.();
+      }}
+    >
+      <div
+        class={`sheet${sheetClass === undefined ? "" : ` ${sheetClass}`}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+      >
         {children}
       </div>
     </div>
@@ -450,8 +470,16 @@ export function MoreSheet(props: MoreSheetProps) {
     ? FIELDS.filter((field) => field.key === "see")
     : FIELDS;
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") props.onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [props.onClose]);
+
   return (
-    <SheetBackdrop label="More">
+    <SheetBackdrop label="More" onDismiss={props.onClose} sheetClass="more-sheet">
       <h2 class="sheet-title">More</h2>
       <form class="more-form" ref={formRef} onSubmit={(event) => event.preventDefault()}>
         {visibleFields.map((field) => (
@@ -490,7 +518,7 @@ export function MoreSheet(props: MoreSheetProps) {
           </>
         )}
       </form>
-      <button type="button" class="sheet-done" aria-label="Done" onClick={props.onClose}>
+      <button type="button" class="sheet-done more-sheet-done" aria-label="Done" onClick={props.onClose}>
         Done
       </button>
     </SheetBackdrop>

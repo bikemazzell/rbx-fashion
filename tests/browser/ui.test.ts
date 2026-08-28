@@ -408,6 +408,50 @@ test("switching a picture to Repeat is one undo step", async () => {
   );
 });
 
+test("more sheet ignores inside clicks, closes on backdrop and Escape, and keeps Done reachable", async () => {
+  const host = mountApp();
+  try {
+    await startEditing(host, "Shirt");
+    await choosePicture(host, await pngFile(400, 300));
+    await waitFor(() => host.querySelector(".segmented") !== null, "segmented appears");
+    moreButton(host).click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more sheet");
+    const sizeInput = requireEl(
+      host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Size"]'),
+      "size input",
+    ) as HTMLInputElement;
+    commitNumberInput(sizeInput, "120");
+
+    (requireEl(host.querySelector('[role="dialog"][aria-label="More"] .sheet-title'), "sheet title") as HTMLElement).click();
+    expect(host.querySelector('[role="dialog"][aria-label="More"]')).not.toBeNull();
+
+    (requireEl(host.querySelector(".sheet-backdrop"), "backdrop") as HTMLElement).click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') === null, "backdrop closes more");
+
+    moreButton(host).click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more reopens");
+    const reopenedSize = requireEl(
+      host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Size"]'),
+      "size input",
+    ) as HTMLInputElement;
+    expect(reopenedSize.value).toBe("120");
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') === null, "escape closes more");
+
+    await page.viewport(390, 844);
+    moreButton(host).click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more at phone size");
+    const done = requireEl(
+      dialog(host, "More").querySelector(".sheet-done"),
+      "done button",
+    );
+    expect(done.getBoundingClientRect().bottom).toBeLessThanOrEqual(window.innerHeight);
+  } finally {
+    await page.viewport(414, 896);
+  }
+}, 15000);
+
 test("pattern too small surfaces the exact child message near the toolbar", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
