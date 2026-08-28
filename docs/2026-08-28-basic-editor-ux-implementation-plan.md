@@ -10,13 +10,9 @@
 
 ---
 
-## Source specifications and settled scope
+## Canonical scope
 
-Implement these documents together:
-
-- `docs/2026-08-28-basic-editor-ux-design.md`
-- `docs/2026-08-27-editor-interaction-polish-design.md`
-- `docs/2026-08-27-preview-wheel-zoom-design.md`
+This is the single canonical execution document for the work. It fully incorporates the settled requirements from the earlier interaction-polish, preview-wheel-zoom, and basic-editor-UX designs plus the valid GLM/Qwen review corrections. An implementation session needs this plan and the repository; the earlier design documents are provenance, not additional execution instructions.
 
 Preserve the existing touch gestures, archive format, compositor, export dimensions, lazy Three.js import, offline behavior, eight-item cap, and classic pants mapping. Do not add a UV/template mode, tutorial system, persistence, geometry editing, a new dependency, or a project-schema field.
 
