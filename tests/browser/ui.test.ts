@@ -242,6 +242,25 @@ test("start screen offers three garments and a fresh editor starts empty with di
   await closeSheet(host, "Items", "Done");
 });
 
+test("a new editor points to Add and disables Repeat until a visible picture is selected", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  expect(host.querySelector(".workspace-empty")?.textContent).toBe(
+    "Tap Add to add a picture or color.",
+  );
+  expect(toolbarButton(host, "Repeat").disabled).toBe(true);
+
+  await addColor(host, 0);
+  expect(host.querySelector(".workspace-empty")).toBeNull();
+  expect(toolbarButton(host, "Repeat").disabled).toBe(true);
+  moreButton(host).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more");
+  const more = dialog(host, "More");
+  expect(Array.from(more.querySelectorAll("input")).map((input) => input.getAttribute("aria-label"))).toEqual([
+    "See-through",
+  ]);
+});
+
 test("adding a color creates one undoable item and Fill Clothing shows active", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
@@ -348,9 +367,18 @@ test("picture imports as a sticker and Fill Clothing changes composited pixels",
   await waitFor(() => host.querySelector(".segmented") !== null, "segmented appears");
   expect(segmentedButton(host, "Sticker").getAttribute("aria-pressed")).toBe("true");
   expect(segmentedButton(host, "Fill Clothing").getAttribute("aria-pressed")).toBe("false");
+  expect(toolbarButton(host, "Repeat").disabled).toBe(false);
   await openItems(host);
   expect(itemNames(host)).toEqual(["Picture 1"]);
   await closeSheet(host, "Items", "Done");
+  await openItems(host);
+  (requireEl(itemRows(host)[0]?.querySelector('[aria-pressed]'), "eye toggle") as HTMLButtonElement).click();
+  await closeSheet(host, "Items", "Done");
+  await waitFor(() => toolbarButton(host, "Repeat").disabled === true, "repeat disabled while hidden");
+  await openItems(host);
+  (requireEl(itemRows(host)[0]?.querySelector('[aria-pressed]'), "eye toggle") as HTMLButtonElement).click();
+  await closeSheet(host, "Items", "Done");
+  await waitFor(() => toolbarButton(host, "Repeat").disabled === false, "repeat enabled when shown");
   await waitFor(() => pixelAt(host, 10, 10)[3] === 0, "decal leaves corner empty");
   segmentedButton(host, "Fill Clothing").click();
   await waitFor(() => {

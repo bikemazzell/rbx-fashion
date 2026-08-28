@@ -275,6 +275,9 @@ export function Workspace(props: WorkspaceProps) {
 
   return (
     <div class="workspace-stage" ref={stageRef} tabIndex={0}>
+      {props.document.layers.length === 0 && (
+        <p class="workspace-empty">Tap Add to add a picture or color.</p>
+      )}
       <canvas
         class="workspace-canvas"
         role="img"

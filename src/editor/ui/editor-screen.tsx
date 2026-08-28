@@ -101,6 +101,8 @@ function placementDisabled(layer: Layer, value: PlacementMode): boolean {
 export function EditorScreen(props: EditorScreenProps) {
   const doc: ProjectDocumentV1 = props.session.document;
   const selected = props.selectedLayer;
+  const repeatDisabled =
+    selected === null || selected.kind !== "raster" || !selected.visible;
   const itemsPanel = (
     <ItemsPanel
       layersTopFirst={props.layersTopFirst}
@@ -249,7 +251,13 @@ export function EditorScreen(props: EditorScreenProps) {
           <IconMove />
           <span class="tool-label">Move</span>
         </button>
-        <button type="button" aria-label="Repeat" onClick={() => props.onToolbar("repeat")}>
+        <button
+          type="button"
+          aria-label="Repeat"
+          disabled={repeatDisabled}
+          aria-disabled={repeatDisabled ? "true" : "false"}
+          onClick={() => props.onToolbar("repeat")}
+        >
           <IconRepeat />
           <span class="tool-label">Repeat</span>
         </button>

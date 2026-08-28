@@ -289,6 +289,20 @@ button {
   touch-action: none;
 }
 
+.workspace-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+  text-align: center;
+  pointer-events: none;
+}
+
 .preview-stage {
   position: relative;
   flex: 1;
@@ -410,6 +424,11 @@ button {
   border-radius: 0.85rem;
   background: transparent;
   cursor: pointer;
+}
+
+.toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .toolbar button:active {

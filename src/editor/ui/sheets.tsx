@@ -446,11 +446,15 @@ export function MoreSheet(props: MoreSheetProps) {
     setNonce((value) => value + 1);
   };
 
+  const visibleFields = layer.kind === "solid"
+    ? FIELDS.filter((field) => field.key === "see")
+    : FIELDS;
+
   return (
     <SheetBackdrop label="More">
       <h2 class="sheet-title">More</h2>
       <form class="more-form" ref={formRef} onSubmit={(event) => event.preventDefault()}>
-        {FIELDS.map((field) => (
+        {visibleFields.map((field) => (
           <label key={field.key} class="field">
             <span class="field-label">{field.label}</span>
             <input
@@ -465,22 +469,26 @@ export function MoreSheet(props: MoreSheetProps) {
             />
           </label>
         ))}
-        <h3 class="field-group">Crop</h3>
-        {CROP_FIELDS.map((field) => (
-          <label key={field.key} class="field">
-            <span class="field-label">{field.label}</span>
-            <input
-              type="number"
-              data-field={field.key}
-              aria-label={`Crop ${field.label}`}
-              min={0}
-              max={1}
-              step={0.01}
-              defaultValue={fieldValue(layer, field.key)}
-              onChange={onCommit(field.key)}
-            />
-          </label>
-        ))}
+        {layer.kind === "raster" && (
+          <>
+            <h3 class="field-group">Crop</h3>
+            {CROP_FIELDS.map((field) => (
+              <label key={field.key} class="field">
+                <span class="field-label">{field.label}</span>
+                <input
+                  type="number"
+                  data-field={field.key}
+                  aria-label={`Crop ${field.label}`}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  defaultValue={fieldValue(layer, field.key)}
+                  onChange={onCommit(field.key)}
+                />
+              </label>
+            ))}
+          </>
+        )}
       </form>
       <button type="button" class="sheet-done" aria-label="Done" onClick={props.onClose}>
         Done
