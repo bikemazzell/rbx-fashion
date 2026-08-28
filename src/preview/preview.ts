@@ -34,9 +34,16 @@ const MAX_ELEVATION = 85;
 const MIN_DISTANCE = 4;
 const MAX_DISTANCE = 16;
 const DEGREES_PER_PIXEL = 0.5;
+const WHEEL_ZOOM_RATE = 0.0015;
 const TARGET = new Vector3(0, -0.5, 0);
 const BASE_COLOR = 0xd9d9d9;
 const BACKGROUND_COLOR = 0xe6e9ef;
+
+function wheelDeltaPixels(event: WheelEvent, pageHeight: number): number {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * pageHeight;
+  return event.deltaY;
+}
 
 interface PointerPoint {
   x: number;
@@ -214,6 +221,17 @@ export function createPreview(container: HTMLElement, options: PreviewOptions): 
     pointers.delete(event.pointerId);
   };
 
+  const onWheel = (event: WheelEvent): void => {
+    const delta = wheelDeltaPixels(event, Math.max(1, domElement.clientHeight));
+    if (delta === 0) return;
+    event.preventDefault();
+    distance = Math.min(
+      MAX_DISTANCE,
+      Math.max(MIN_DISTANCE, distance * Math.exp(delta * WHEEL_ZOOM_RATE)),
+    );
+    applyOrbit();
+  };
+
   const onContextLost = (event: Event): void => {
     event.preventDefault();
     contextLost = true;
@@ -235,6 +253,7 @@ export function createPreview(container: HTMLElement, options: PreviewOptions): 
   domElement.addEventListener("pointermove", onPointerMove);
   domElement.addEventListener("pointerup", onPointerEnd);
   domElement.addEventListener("pointercancel", onPointerEnd);
+  domElement.addEventListener("wheel", onWheel, { passive: false });
   domElement.addEventListener("webglcontextlost", onContextLost);
   document.addEventListener("visibilitychange", onVisibilityChange);
 
@@ -288,6 +307,7 @@ export function createPreview(container: HTMLElement, options: PreviewOptions): 
       domElement.removeEventListener("pointermove", onPointerMove);
       domElement.removeEventListener("pointerup", onPointerEnd);
       domElement.removeEventListener("pointercancel", onPointerEnd);
+      domElement.removeEventListener("wheel", onWheel);
       domElement.removeEventListener("webglcontextlost", onContextLost);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       pointers.clear();

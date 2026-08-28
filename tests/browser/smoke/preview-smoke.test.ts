@@ -114,6 +114,29 @@ function sampleAt(read: Readback, x: number, y: number): readonly [number, numbe
   return [read.data[base] ?? 0, read.data[base + 1] ?? 0, read.data[base + 2] ?? 0];
 }
 
+function redPanelWidth(canvas: HTMLCanvasElement): number {
+  const read = readPixels(canvas);
+  let minX = read.width;
+  let maxX = 0;
+  for (let y = 0; y < read.height; y += 2) {
+    for (let x = 0; x < read.width; x += 2) {
+      const color = sampleAt(read, x, y);
+      if (
+        Math.abs((color[0] ?? 0) - 255) <= COLOR_TOLERANCE &&
+        (color[1] ?? 0) <= COLOR_TOLERANCE &&
+        (color[2] ?? 0) <= COLOR_TOLERANCE
+      ) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+    }
+  }
+  if (minX > maxX) {
+    throw new Error("no red pixels found");
+  }
+  return maxX - minX;
+}
+
 function expectColorNear(
   actual: readonly [number, number, number],
   expected: readonly [number, number, number],
@@ -342,29 +365,7 @@ test("pinch zoom grows the on-screen panel size", async () => {
   try {
     harness.handle.updateCanvas(atlasFixture(STANDARD_QUADRANTS));
     await settle();
-    const redBounds = (): { width: number } => {
-      const read = readPixels(harness.canvas);
-      let minX = read.width;
-      let maxX = 0;
-      for (let y = 0; y < read.height; y += 2) {
-        for (let x = 0; x < read.width; x += 2) {
-          const color = sampleAt(read, x, y);
-          if (
-            Math.abs((color[0] ?? 0) - 255) <= COLOR_TOLERANCE &&
-            (color[1] ?? 0) <= COLOR_TOLERANCE &&
-            (color[2] ?? 0) <= COLOR_TOLERANCE
-          ) {
-            minX = Math.min(minX, x);
-            maxX = Math.max(maxX, x);
-          }
-        }
-      }
-      if (minX > maxX) {
-        throw new Error("no red pixels found");
-      }
-      return { width: maxX - minX };
-    };
-    const before = redBounds();
+    const before = redPanelWidth(harness.canvas);
     const startX1 = CONTAINER_WIDTH / 2 - 100;
     const startX2 = CONTAINER_WIDTH / 2 + 100;
     const centerY = CONTAINER_HEIGHT / 2;
@@ -377,10 +378,41 @@ test("pinch zoom grows the on-screen panel size", async () => {
     dispatchPointer(harness.canvas, "pointerup", 1, startX1 - 100, centerY);
     dispatchPointer(harness.canvas, "pointerup", 2, startX2 + 100, centerY);
     await settle();
-    const after = redBounds();
-    expect(after.width, `pinch must zoom in (before ${before.width}, after ${after.width})`).toBeGreaterThan(
-      before.width * 1.5,
-    );
+    const after = redPanelWidth(harness.canvas);
+    expect(after, `pinch must zoom in (before ${before}, after ${after})`).toBeGreaterThan(before * 1.5);
+  } finally {
+    harness.dispose();
+  }
+});
+
+test("wheel zoom changes avatar size, prevents canvas scroll, clamps, and Reset restores it", async () => {
+  const harness = setup("shirt");
+  try {
+    harness.handle.updateCanvas(atlasFixture(STANDARD_QUADRANTS));
+    await settle();
+    const before = redPanelWidth(harness.canvas);
+
+    const zoomIn = new WheelEvent("wheel", { deltaY: -240, cancelable: true, bubbles: true });
+    harness.canvas.dispatchEvent(zoomIn);
+    await settle();
+    const afterIn = redPanelWidth(harness.canvas);
+    expect(zoomIn.defaultPrevented).toBe(true);
+    expect(afterIn).toBeGreaterThan(before);
+
+    for (let index = 0; index < 100; index += 1) {
+      harness.canvas.dispatchEvent(new WheelEvent("wheel", { deltaY: -1000, cancelable: true }));
+    }
+    await settle();
+    const clampedIn = redPanelWidth(harness.canvas);
+    expect(clampedIn).toBeGreaterThanOrEqual(afterIn);
+
+    harness.canvas.dispatchEvent(new WheelEvent("wheel", { deltaY: 1000, cancelable: true }));
+    await settle();
+    expect(redPanelWidth(harness.canvas)).toBeLessThan(clampedIn);
+
+    harness.handle.resetView();
+    await settle();
+    expect(redPanelWidth(harness.canvas)).toBeCloseTo(before, 0);
   } finally {
     harness.dispose();
   }
