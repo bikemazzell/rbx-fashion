@@ -784,7 +784,7 @@ export function DesignerApp() {
         onToolbar={onToolbar}
         onPlacement={onPlacement}
         onComposeError={handleComposeError}
-        getSession={() => session}
+        getSession={() => sessionRef.current ?? session}
         dispatch={apply}
         onSelect={setSelectedItemId}
         onRename={onRename}

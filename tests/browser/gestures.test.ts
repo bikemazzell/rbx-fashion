@@ -194,6 +194,20 @@ const DECAL_DEFAULT = {
   crop: { x: 0, y: 0, width: 1, height: 1 },
 };
 
+test("full-map and oversized artwork handles stay inside the clothing canvas", () => {
+  const full = footprintGeometry(
+    { ...DECAL_DEFAULT, positionX: 292.5, positionY: 279.5, scaleX: 4, scaleY: 4 },
+    { width: 400, height: 300 },
+    { width: 585, height: 559, inset: 16 },
+  );
+  for (const handle of [full.scaleHandle, full.rotateHandle]) {
+    expect(handle.x).toBeGreaterThanOrEqual(16);
+    expect(handle.x).toBeLessThanOrEqual(569);
+    expect(handle.y).toBeGreaterThanOrEqual(16);
+    expect(handle.y).toBeLessThanOrEqual(543);
+  }
+});
+
 test("move drag on the selected item is one undo step and restores on undo", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
@@ -578,6 +592,55 @@ test("rapid move bursts land the exact final position on lift", async () => {
   await waitFor(() => host.querySelector(".segmented") === null, "the whole burst was one undo step");
 }, 10000);
 
+test("wheel bursts over a selected picture scale it as one undo step and ignore empty space", async () => {
+  const host = mountApp();
+  await startEditing(host, "T-Shirt");
+  await importSticker(host);
+  await openMore(host);
+  expect(moreField(host, "Wide")).toBe(100);
+  expect(moreField(host, "Tall")).toBe(100);
+
+  const center = canvasToScreen(host, 256, 256);
+  for (let index = 0; index < 4; index += 1) {
+    const event = new WheelEvent("wheel", {
+      deltaY: -100,
+      clientX: center.x,
+      clientY: center.y,
+      cancelable: true,
+      bubbles: true,
+    });
+    overlayEl(host).dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  }
+  await waitFor(
+    () => moreField(host, "Wide") >= 175 && moreField(host, "Tall") >= 175,
+    "burst scales both axes past 175 percent",
+  );
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+
+  clickUndo(host);
+  await waitFor(
+    () => moreField(host, "Wide") === 100 && moreField(host, "Tall") === 100,
+    "one undo restores the pre-burst scale",
+  );
+  clickUndo(host);
+  await waitFor(() => host.querySelector(".segmented") === null, "second undo removes the picture");
+
+  const empty = canvasToScreen(host, 256, 256);
+  const stray = new WheelEvent("wheel", {
+    deltaY: -100,
+    clientX: empty.x,
+    clientY: empty.y,
+    cancelable: true,
+    bubbles: true,
+  });
+  overlayEl(host).dispatchEvent(stray);
+  expect(stray.defaultPrevented).toBe(false);
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+  expect(host.querySelector(".segmented")).toBeNull();
+  expect(undoDisabled(host)).toBe(true);
+}, 15000);
+
 interface Harness {
   overlay: HTMLCanvasElement;
   actions: string[];
@@ -696,6 +759,24 @@ test("destroy during an active item gesture rolls back with cancel-gesture", asy
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     harnessPointer(harness, "pointermove", 1, 456, 256);
     harness.destroy();
+    expect(harness.actions).toContain("cancel-gesture");
+    expect(harness.actions.filter((type) => type === "commit-gesture")).toHaveLength(0);
+    expect(harness.actions.indexOf("cancel-gesture")).toBeGreaterThan(
+      harness.actions.indexOf("begin-gesture"),
+    );
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("destroy during a wheel burst cancels the gesture without committing", () => {
+  const harness = createHarness();
+  try {
+    harness.overlay.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -100, clientX: 256, clientY: 256, cancelable: true, bubbles: true }),
+    );
+    harness.destroy();
+    expect(harness.actions).toContain("begin-gesture");
     expect(harness.actions).toContain("cancel-gesture");
     expect(harness.actions.filter((type) => type === "commit-gesture")).toHaveLength(0);
     expect(harness.actions.indexOf("cancel-gesture")).toBeGreaterThan(

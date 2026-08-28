@@ -24,9 +24,23 @@ export interface FootprintGeometry {
 
 const ROTATE_HANDLE_OFFSET = 36;
 
+export interface HandleBounds {
+  width: number;
+  height: number;
+  inset: number;
+}
+
+function clampPoint(point: Point, bounds: HandleBounds): Point {
+  return {
+    x: Math.min(bounds.width - bounds.inset, Math.max(bounds.inset, point.x)),
+    y: Math.min(bounds.height - bounds.inset, Math.max(bounds.inset, point.y)),
+  };
+}
+
 export function footprintGeometry(
   transform: Transform,
   source: { width: number; height: number },
+  bounds?: HandleBounds,
 ): FootprintGeometry {
   const cw = source.width * transform.crop.width;
   const ch = source.height * transform.crop.height;
@@ -39,6 +53,8 @@ export function footprintGeometry(
     x: transform.positionX + x * cos - y * sin,
     y: transform.positionY + x * sin + y * cos,
   });
+  const rawScaleHandle = map(halfWidth, halfHeight);
+  const rawRotateHandle = map(0, -(halfHeight + ROTATE_HANDLE_OFFSET));
   return {
     center: { x: transform.positionX, y: transform.positionY },
     rotationDeg: transform.rotationDeg,
@@ -50,8 +66,8 @@ export function footprintGeometry(
       map(halfWidth, halfHeight),
       map(-halfWidth, halfHeight),
     ],
-    scaleHandle: map(halfWidth, halfHeight),
-    rotateHandle: map(0, -(halfHeight + ROTATE_HANDLE_OFFSET)),
+    scaleHandle: bounds === undefined ? rawScaleHandle : clampPoint(rawScaleHandle, bounds),
+    rotateHandle: bounds === undefined ? rawRotateHandle : clampPoint(rawRotateHandle, bounds),
   };
 }
 
@@ -76,6 +92,14 @@ const MIN_VIEWPORT_SCALE = 0.25;
 const MAX_VIEWPORT_SCALE = 8;
 const MIN_ITEM_SCALE = 0.01;
 const HANDLE_SCREEN_RADIUS = 22;
+const WHEEL_BURST_MS = 160;
+const WHEEL_SCALE_RATE = 0.0015;
+
+function normalizedWheelDelta(event: WheelEvent, pageHeight: number): number {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * pageHeight;
+  return event.deltaY;
+}
 
 interface GestureBase {
   id: string;
@@ -137,6 +161,8 @@ export function createGestureController(options: GestureControllerOptions): { de
   let anchors: { cx: number; cy: number; dist: number | null } | null = null;
   let pendingUpdate: { id: string; patch: TransformPatch } | null = null;
   let scheduledFrame: number | null = null;
+  let wheelGestureActive = false;
+  let wheelCommitTimer: number | null = null;
 
   const fitCenter = (): Point => {
     const rect = options.canvasRect();
@@ -176,6 +202,7 @@ export function createGestureController(options: GestureControllerOptions): { de
   };
 
   const startItemInteraction = (event: PointerEvent): void => {
+    finishWheelGesture();
     const point = screenToCanvas(event.clientX, event.clientY);
     const selectedId = options.selectedId();
     const selectedFootprint = selectedId === null ? null : options.itemFootprint(selectedId);
@@ -483,6 +510,49 @@ export function createGestureController(options: GestureControllerOptions): { de
     scaleY: Math.max(MIN_ITEM_SCALE, transform.scaleY * factor),
   });
 
+  const finishWheelGesture = (): void => {
+    if (!wheelGestureActive) return;
+    if (wheelCommitTimer !== null) window.clearTimeout(wheelCommitTimer);
+    wheelCommitTimer = null;
+    wheelGestureActive = false;
+    options.dispatch({ type: "commit-gesture" });
+  };
+
+  const cancelWheelGesture = (): void => {
+    if (!wheelGestureActive) return;
+    if (wheelCommitTimer !== null) window.clearTimeout(wheelCommitTimer);
+    wheelCommitTimer = null;
+    wheelGestureActive = false;
+    options.dispatch({ type: "cancel-gesture" });
+  };
+
+  const onWheel = (event: WheelEvent): void => {
+    if (itemGesture !== null || viewportActive || pointers.size > 0) return;
+    const id = options.selectedId();
+    if (id === null) return;
+    const layer = options.getSession().document.layers.find((candidate) => candidate.id === id);
+    if (layer === undefined || layer.kind !== "raster" || !layer.visible) return;
+    const footprint = options.itemFootprint(id);
+    if (footprint === null) return;
+    const point = screenToCanvas(event.clientX, event.clientY);
+    if (!pointInFootprint(footprint, point)) return;
+    const delta = normalizedWheelDelta(event, Math.max(1, overlay.offsetHeight));
+    if (delta === 0) return;
+
+    event.preventDefault();
+    if (!wheelGestureActive) {
+      options.dispatch({ type: "begin-gesture" });
+      wheelGestureActive = true;
+    }
+    const factor = Math.min(1.25, Math.max(0.8, Math.exp(-delta * WHEEL_SCALE_RATE)));
+    options.dispatch({
+      type: "update-gesture",
+      mutation: { op: "patch-transform", id, patch: scaleBy(layer.transform, factor) },
+    });
+    if (wheelCommitTimer !== null) window.clearTimeout(wheelCommitTimer);
+    wheelCommitTimer = window.setTimeout(finishWheelGesture, WHEEL_BURST_MS);
+  };
+
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat) {
       return;
@@ -529,6 +599,7 @@ export function createGestureController(options: GestureControllerOptions): { de
         return;
     }
     event.preventDefault();
+    finishWheelGesture();
     options.dispatch({ type: "patch-transform", id, patch });
   };
 
@@ -536,6 +607,7 @@ export function createGestureController(options: GestureControllerOptions): { de
   overlay.addEventListener("pointermove", onPointerMove);
   overlay.addEventListener("pointerup", onPointerUp);
   overlay.addEventListener("pointercancel", onPointerCancel);
+  overlay.addEventListener("wheel", onWheel, { passive: false });
   const keyboardHost = overlay.parentElement;
   if (keyboardHost !== null) {
     keyboardHost.addEventListener("keydown", onKeyDown);
@@ -543,6 +615,7 @@ export function createGestureController(options: GestureControllerOptions): { de
 
   return {
     destroy(): void {
+      cancelWheelGesture();
       if (itemGesture !== null) {
         options.dispatch({ type: "cancel-gesture" });
         itemGesture = null;
@@ -556,6 +629,7 @@ export function createGestureController(options: GestureControllerOptions): { de
       overlay.removeEventListener("pointermove", onPointerMove);
       overlay.removeEventListener("pointerup", onPointerUp);
       overlay.removeEventListener("pointercancel", onPointerCancel);
+      overlay.removeEventListener("wheel", onWheel);
       if (keyboardHost !== null) {
         keyboardHost.removeEventListener("keydown", onKeyDown);
       }

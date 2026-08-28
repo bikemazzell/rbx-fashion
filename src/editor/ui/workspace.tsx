@@ -175,7 +175,8 @@ export function Workspace(props: WorkspaceProps) {
     if (layer.kind === "raster" && layer.assetId !== undefined) {
       const asset = props.assets.get(layer.assetId);
       if (asset !== undefined) {
-        const footprint = footprintGeometry(layer.transform, asset);
+        const handleBounds = { width: template.width, height: template.height, inset: 16 };
+        const footprint = footprintGeometry(layer.transform, asset, handleBounds);
         strokePolygon(overlayCtx, footprint.corners, lineWidth);
         const topStart = footprint.corners[0];
         const topEnd = footprint.corners[1];
@@ -264,7 +265,9 @@ export function Workspace(props: WorkspaceProps) {
         if (asset === undefined) {
           return null;
         }
-        return footprintGeometry(layer.transform, asset);
+        const template = getTemplate(current.document.garmentType);
+        const handleBounds = { width: template.width, height: template.height, inset: 16 };
+        return footprintGeometry(layer.transform, asset, handleBounds);
       },
       onViewportChange: setViewport,
     });
