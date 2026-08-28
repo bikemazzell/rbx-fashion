@@ -1148,6 +1148,119 @@ git status --short
 
 Expected: the commit succeeds and `git status --short` is empty. Do not push or deploy without a separate explicit request.
 
+### Task 8: Make layer visibility and copying obvious
+
+**Files:**
+- Modify: `src/editor/ui/icons.tsx`
+- Modify: `src/editor/ui/items-panel.tsx`
+- Modify: `src/styles.css`
+- Test: `tests/browser/ui.test.ts`
+- Test: `tests/browser/asset-lifecycle.test.ts`
+
+- [ ] **Step 1: Write failing browser assertions for visible state and wording**
+
+Extend the existing Items-sheet browser test so the visible layer starts with a normal eye and
+`aria-pressed="true"`; after Hide is clicked, the same control is labeled Show, has
+`aria-pressed="false"`, contains the crossed-eye slash, and computes to reduced opacity. Assert
+that the copy control has `aria-label="Copy item"`, visibly renders `Copy`, remains at least 44px
+square, and still creates exactly one duplicate. At the phone viewport, assert the item row does
+not overflow horizontally. Update existing test selectors from `Duplicate` to `Copy item` without
+changing their behavioral expectations.
+
+- [ ] **Step 2: Run the focused test and verify RED**
+
+```bash
+npx vitest run tests/browser/ui.test.ts --project browser-chromium -t "items sheet supports"
+```
+
+Expected: FAIL because the current eye never changes or dims and the duplicate button has no
+visible label.
+
+- [ ] **Step 3: Add a crossed-eye icon and render the state explicitly**
+
+Add `IconEyeOff` beside `IconEye` in `src/editor/ui/icons.tsx`, reusing the eye paths plus a
+diagonal slash:
+
+```tsx
+export function IconEyeOff(): JSX.Element {
+  return strokeIcon([
+    "M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z",
+    "M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z",
+    "M3 3l18 18",
+  ]);
+}
+```
+
+In `ItemsPanel`, render `IconEye` only for a visible layer and `IconEyeOff` otherwise. Give the
+visibility button the `item-tool-visibility` class. Change the duplicate control to
+`aria-label="Copy item"`, add `item-tool-copy`, and render a visible label after its icon:
+
+```tsx
+<span class="item-tool-label">Copy</span>
+```
+
+Keep `onToggleVisibility`, `onDuplicate`, reducer actions, item limits, archive format, and layer
+semantics unchanged.
+
+- [ ] **Step 4: Add compact mobile-safe styling**
+
+```css
+.item-tool-visibility[aria-pressed="false"] {
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+.item-tool-copy {
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1;
+}
+
+.item-tool-copy svg {
+  width: 17px;
+  height: 17px;
+}
+
+.item-tool-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+```
+
+Do not add tooltips or a second action row. The label must remain visible on touch devices while
+the existing scrollable Items sheet handles the eight-item maximum.
+
+- [ ] **Step 5: Run focused and complete verification**
+
+```bash
+npx vitest run tests/browser/ui.test.ts tests/browser/asset-lifecycle.test.ts --project browser-chromium
+npm run typecheck
+npm run lint
+npm run test:unit
+npm run test:browser
+npm run build
+npm run check:bundle
+npm run test:pwa
+npm run test:e2e
+git diff --check
+```
+
+Expected: all commands exit 0. Manually verify at 390x844 that hidden state is immediately distinct,
+Copy is readable, the row remains within the Items sheet, and both controls still perform exactly
+one action per press.
+
+- [ ] **Step 6: Commit and push the approved follow-up**
+
+```bash
+git add docs/2026-08-28-basic-editor-ux-implementation-plan.md src/editor/ui/icons.tsx \
+  src/editor/ui/items-panel.tsx src/styles.css tests/browser/ui.test.ts \
+  tests/browser/asset-lifecycle.test.ts
+git commit -m "fix: clarify layer visibility and copying"
+git push origin main
+```
+
+Expected: local and remote `main` point to the new commit and CI starts for that SHA.
+
 ## Completion criteria
 
 - At 844x390, the app mounts usable 2D and 3D stages and keeps Tools inside `100dvh` whether the phone entered landscape from Edit or Preview; at 667x375, the single-pane landscape layout also stays within `100dvh`.
@@ -1156,5 +1269,7 @@ Expected: the commit succeeds and `git status --short` is empty. Do not push or 
 - Imported raster artwork can be moved, uniformly resized, and rotated with reachable controls; same-task wheel events accumulate and each burst undoes as one action.
 - The 3D preview supports drag, pinch, wheel zoom, clamping, and Reset.
 - More closes by backdrop, Escape, or its always-visible Done button without discarding edits.
+- Hidden Items use a crossed and dimmed eye; every copy action has a visible `Copy` label without
+  overflowing the phone-width Items sheet.
 - No dependency, schema, geometry, compositor, export-format, pants-mapping, persistence, or AI-scope expansion occurs.
 - All automated gates pass except the deliberately unmet manual Roblox release-evidence gate.
