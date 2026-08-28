@@ -35,3 +35,49 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
   expect(layout.bodyHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(pageErrors.filter((message) => message.includes("ResizeObserver loop"))).toEqual([]);
 });
+
+test("phone portrait keeps the 2D and 3D stages bounded while switching views", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Shirt", exact: true }).click();
+
+  const layout = async (selector: string) =>
+    page.evaluate((stageSelector) => {
+      const app = document.querySelector<HTMLElement>(".app");
+      const stage = document.querySelector<HTMLElement>(stageSelector);
+      if (app === null || stage === null) throw new Error("editor layout is missing");
+      return {
+        viewportHeight: innerHeight,
+        documentHeight: document.documentElement.scrollHeight,
+        appHeight: app.getBoundingClientRect().height,
+        appOverflowY: getComputedStyle(app).overflowY,
+        stageHeight: stage.getBoundingClientRect().height,
+      };
+    }, selector);
+
+  const edit = await layout(".workspace-stage");
+  expect(edit.appHeight).toBeLessThanOrEqual(edit.viewportHeight + 1);
+  expect(edit.documentHeight).toBeLessThanOrEqual(edit.viewportHeight + 1);
+  expect(edit.appOverflowY).toBe("hidden");
+  expect(edit.stageHeight).toBeGreaterThan(80);
+
+  const viewNavigation = page.getByRole("navigation", { name: "View" });
+  await viewNavigation.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.locator(".preview-stage")).toBeVisible();
+  const previewHeights: number[] = [];
+  for (let sample = 0; sample < 5; sample += 1) {
+    await page.waitForTimeout(100);
+    const preview = await layout(".preview-stage");
+    expect(preview.appHeight).toBeLessThanOrEqual(preview.viewportHeight + 1);
+    expect(preview.documentHeight).toBeLessThanOrEqual(preview.viewportHeight + 1);
+    expect(preview.appOverflowY).toBe("hidden");
+    previewHeights.push(preview.stageHeight);
+  }
+  expect(Math.max(...previewHeights) - Math.min(...previewHeights)).toBeLessThanOrEqual(1);
+
+  await viewNavigation.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".workspace-stage")).toBeVisible();
+  const editAgain = await layout(".workspace-stage");
+  expect(editAgain.documentHeight).toBeLessThanOrEqual(editAgain.viewportHeight + 1);
+  expect(editAgain.stageHeight).toBeGreaterThan(80);
+});

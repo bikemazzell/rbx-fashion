@@ -128,9 +128,11 @@ button {
 }
 
 .app {
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .app-header {
@@ -194,6 +196,7 @@ button {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .pane {
@@ -202,6 +205,7 @@ button {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .pane-preview {
@@ -316,6 +320,8 @@ button {
 }
 
 .preview-stage canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
@@ -534,12 +540,6 @@ button {
   font-weight: 600;
 }
 
-.primary {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: var(--accent);
-}
-
 .items-list {
   list-style: none;
   margin: 0;
@@ -701,22 +701,18 @@ button {
   font-weight: 600;
 }
 
+.primary,
+.dialog-actions button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
 .items-rail {
   display: none;
 }
 
 @media (orientation: landscape) {
-  .app {
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .panes,
-  .pane {
-    overflow: hidden;
-  }
-
   .workspace-stage,
   .preview-stage {
     min-height: 0;

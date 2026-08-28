@@ -561,6 +561,9 @@ test("dirty projects confirm before starting new; clean projects switch immediat
   const unsaved = dialog(host, "Start a new project?");
   expect(unsaved.textContent).toContain("Start a new project? Your changes will be lost.");
   expect(document.activeElement?.textContent).toBe("Keep Editing");
+  const startNew = byText(host, "Start New");
+  expect(getComputedStyle(startNew).backgroundColor).toBe("rgb(29, 78, 216)");
+  expect(getComputedStyle(startNew).color).toBe("rgb(255, 255, 255)");
   byText(host, "Keep Editing").click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Start a new project?"]') === null,
@@ -634,7 +637,11 @@ test("preview tab mounts the lazy 3D preview or reports it unavailable", async (
   const probe = document.createElement("canvas");
   const gl = probe.getContext("webgl2") ?? probe.getContext("webgl");
   if (gl !== null) {
-    expect(previewPane.querySelector("canvas"), "chromium with WebGL must mount the canvas").not.toBeNull();
+    const canvas = requireEl(
+      previewPane.querySelector<HTMLCanvasElement>("canvas"),
+      "chromium with WebGL preview canvas",
+    );
+    expect(getComputedStyle(canvas).position).toBe("absolute");
   }
 }, 12000);
 
