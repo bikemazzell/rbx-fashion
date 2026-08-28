@@ -9,7 +9,7 @@ Make the current editor reliably usable by an 8- to 10-year-old on a phone, tabl
 The audit used the local Vite app at desktop (1440x900), phone portrait (390x844), and phone landscape (844x390), plus the supplied physical-device screenshot.
 
 1. At 844x390, CSS displays two panes but `PreviewPane` is inactive unless the app is in desktop mode or the Preview tab was already selected. The right pane is therefore empty after rotating from Edit.
-2. If Preview was selected before rotating, the document grew to 1,064px tall in a 390px viewport. The 3D stage grew to 923px and pushed the toolbar off-screen.
+2. If Preview was selected before rotating, the document grew to 1,064px tall in a 390px viewport. The 3D stage grew to 923px and pushed the toolbar off-screen. Sub-700px landscape phones have the same short-height risk even though they keep the single-pane tab layout.
 3. The existing viewport browser test passes because it checks the visibility of the empty `.pane-preview` section, not the presence of `.preview-stage` or page overflow.
 4. The More sheet puts Done below the viewport on desktop and mobile. Clicking the backdrop and pressing Escape do not close it.
 5. A full-map or oversized selected picture can put its scale and rotate handles outside the clothing canvas. Mouse-wheel scaling is absent even though touch and keyboard transformations exist.
@@ -25,11 +25,11 @@ The existing save/open archive logic, image dimension routing, layer management,
 Use targeted corrections inside the current Preact, Canvas, and Three.js architecture:
 
 - Add one `dualPane` media-query state that matches the existing 700px landscape CSS breakpoint. It controls whether the 3D component is mounted; `desktop` continues to control only the Items rail.
-- Make the editor a fixed `100dvh` flex shell and let stages shrink in short landscape viewports. The page itself must not become the scrolling surface; sheets retain their own scrolling.
+- In landscape, make the editor a fixed `100dvh` flex shell and let stages shrink at every width. Portrait retains its current minimum-height/page-scroll fallback for unusually short split-screen viewports. Sheets retain their own scrolling.
 - Reuse the existing archive input and loader on the welcome screen. No persistence, account, server, or browser database is introduced.
 - Add short garment descriptions and one pointer-transparent empty-stage prompt.
 - Disable Repeat unless a visible raster layer is selected. Keep Move as the existing return-to-edit action, and show only opacity in More for solid-color layers.
-- Extend the current gesture controller with an eligible, non-passive wheel interaction. Wheel events over the selected picture scale it uniformly and coalesce into one undo entry per burst.
+- Extend the current gesture controller with an eligible, non-passive wheel interaction. Wheel events over the selected picture read the synchronously updated session reference, scale it uniformly, and coalesce into one undo entry per burst.
 - Clamp the displayed and hit-tested scale/rotate handles to the clothing canvas so they remain reachable for full-map and oversized images.
 - Add a non-passive wheel handler directly to the Three.js canvas for camera-distance zoom.
 - Make only the More sheet dismissible by backdrop click and Escape, and keep its Done button anchored while only the fields scroll. Other sheets retain their current explicit actions.
@@ -58,7 +58,7 @@ Repeat is disabled when there is no selected visible raster picture. It is enabl
 
 ### Mobile layout
 
-Portrait keeps Edit/Preview tabs. At 700px or wider in landscape, Edit and Preview are both mounted and visible even if the device rotated while Edit was active. The header, panes, and toolbar fit inside `100dvh`; neither the document nor body scrolls vertically. The two stages may shrink below 240px in short landscape viewports.
+Portrait keeps Edit/Preview tabs and may page-scroll only when a very short split-screen viewport cannot contain its minimum stage. Every landscape size fits the header, active pane(s), tabs where applicable, and toolbar inside `100dvh`; neither the document nor body scrolls vertically. At 700px or wider in landscape, Edit and Preview are both mounted and visible even if the device rotated while Edit was active. Stages may shrink below 240px in short landscape viewports.
 
 ### Picture and preview interaction
 
@@ -80,10 +80,11 @@ The More sheet closes when the user taps/clicks its dim backdrop, presses Escape
 Tests must reproduce the observed failures rather than only inspect CSS classes:
 
 - At 844x390 after choosing Shirt from the welcome screen, `.preview-stage` is mounted, both stages have positive usable height, the toolbar bottom is within `innerHeight`, and document/body scroll height does not exceed the viewport by more than rounding tolerance.
+- At 667x375, the single-pane landscape layout keeps its tabbar, stage, and toolbar visible without document/body overflow.
 - Portrait 390x844 and desktop 1440x900 retain their current tab/rail behavior.
 - The welcome screen can open a generated valid project archive and reports invalid input without leaving the screen.
 - Garment descriptions, the empty prompt, Repeat enablement, and solid-only More fields have browser assertions.
-- Wheel tests prove eligibility, scaling direction, clamping, `preventDefault`, burst undo grouping, and cleanup.
+- Wheel tests prove eligibility, scaling direction, cumulative same-task updates, clamping, `preventDefault`, burst undo grouping, and cleanup.
 - A real WebGL browser test proves that 3D wheel zoom changes the rendered avatar size and Reset restores it.
 - More tests cover backdrop, inside click, Escape, anchored Done geometry, and preserved edits.
 
