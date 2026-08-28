@@ -17,6 +17,7 @@ The audit used the local Vite app at desktop (1440x900), phone portrait (390x844
 7. The welcome screen does not explain the garment choices and cannot open a saved `.rbxcloth.zip` project. A returning user must start a throwaway garment first.
 8. A new project shows a blank 2D stage. The only instruction is in the Items panel, which is hidden behind a button on mobile.
 9. Repeat remains enabled with no selected picture or with a solid-color layer, even though activating it has no effect. More exposes picture transform and crop fields for solid colors even though a color is intended to fill the garment.
+10. Repeated viewport changes produced a storm of `ResizeObserver loop completed with undelivered notifications` errors. Both canvas observers currently mutate observed layout synchronously inside their callbacks.
 
 The existing save/open archive logic, image dimension routing, layer management, touch item gestures, 3D orbit/pinch, compositing, and export paths are already covered by passing tests and do not need redesign.
 
@@ -26,6 +27,7 @@ Use targeted corrections inside the current Preact, Canvas, and Three.js archite
 
 - Add one `dualPane` media-query state that matches the existing 700px landscape CSS breakpoint. It controls whether the 3D component is mounted; `desktop` continues to control only the Items rail.
 - In landscape, make the editor a fixed `100dvh` flex shell and let stages shrink at every width. Portrait retains its current minimum-height/page-scroll fallback for unusually short split-screen viewports. Sheets retain their own scrolling.
+- Coalesce Workspace and Three.js resize-observer work through one animation frame and cancel queued resize work during cleanup. This prevents observer callbacks from synchronously retriggering layout.
 - Reuse the existing archive input and loader on the welcome screen. No persistence, account, server, or browser database is introduced.
 - Add short garment descriptions and one pointer-transparent empty-stage prompt.
 - Disable Repeat unless a visible raster layer is selected. Keep Move as the existing return-to-edit action, and show only opacity in More for solid-color layers.
@@ -81,6 +83,7 @@ Tests must reproduce the observed failures rather than only inspect CSS classes:
 
 - At 844x390 after choosing Shirt from the welcome screen, `.preview-stage` is mounted, both stages have positive usable height, the toolbar bottom is within `innerHeight`, and document/body scroll height does not exceed the viewport by more than rounding tolerance.
 - At 667x375, the single-pane landscape layout keeps its tabbar, stage, and toolbar visible without document/body overflow.
+- Rotating/resizing the browser between portrait and landscape produces no ResizeObserver loop page errors.
 - Portrait 390x844 and desktop 1440x900 retain their current tab/rail behavior.
 - The welcome screen can open a generated valid project archive and reports invalid input without leaving the screen.
 - Garment descriptions, the empty prompt, Repeat enablement, and solid-only More fields have browser assertions.

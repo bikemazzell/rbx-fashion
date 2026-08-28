@@ -48,6 +48,8 @@ The current browser suite is green but does not catch the mobile bug: its landsc
 - Create: `tests/e2e/mobile-layout.spec.ts`
 - Modify: `src/editor/ui/designer-app.tsx`
 - Modify: `src/editor/ui/editor-screen.tsx`
+- Modify: `src/editor/ui/workspace.tsx`
+- Modify: `src/preview/preview.ts`
 - Modify: `src/styles.css`
 
 - [ ] **Step 1: Strengthen the browser viewport matrix so the present bug is RED**
@@ -105,9 +107,12 @@ Create `tests/e2e/mobile-layout.spec.ts`:
 import { expect, test } from "@playwright/test";
 
 test("phone landscape mounts both editors without pushing tools below the viewport", async ({ page }) => {
-  await page.setViewportSize({ width: 844, height: 390 });
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.getByRole("button", { name: "Shirt", exact: true }).click();
+  await page.setViewportSize({ width: 844, height: 390 });
 
   await expect(page.locator(".workspace-stage")).toBeVisible();
   await expect(page.locator(".preview-stage")).toBeVisible();
@@ -134,6 +139,7 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
   expect(layout.toolbar.bottom).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(layout.documentHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(layout.bodyHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
+  expect(pageErrors.filter((message) => message.includes("ResizeObserver loop"))).toEqual([]);
 });
 ```
 
@@ -146,7 +152,7 @@ npx vitest run --project browser-chromium tests/browser/ui.test.ts
 npx playwright test tests/e2e/mobile-layout.spec.ts --project=chromium
 ```
 
-Expected: at 844x390 the browser test times out waiting for `.preview-stage`, while 667x375 reports the toolbar/document below the viewport; the end-to-end test either cannot find `.preview-stage` or reports document/toolbar geometry below the 390px viewport.
+Expected: at 844x390 the browser test times out waiting for `.preview-stage`, while 667x375 reports the toolbar/document below the viewport; the end-to-end test cannot find `.preview-stage`, reports bad geometry, or records ResizeObserver loop errors during portrait-to-landscape rotation.
 
 - [ ] **Step 4: Add a media-query hook and a distinct dual-pane flag**
 
@@ -255,7 +261,51 @@ Keep the default `.app` scroll fallback for portrait, but fix its flex minimums.
 
 Do not set global `body { overflow: hidden; }` and do not make portrait `.app` a fixed height; the welcome screen and an unusually short portrait/split-screen editor must remain scrollable.
 
-- [ ] **Step 7: Run the responsive tests and the complete existing viewport/accessibility test**
+- [ ] **Step 7: Coalesce resize-observer writes outside the observer delivery cycle**
+
+In the overlay-sync effect in `src/editor/ui/workspace.tsx`, replace the synchronous observer callback with one queued frame:
+
+```ts
+let syncFrame = 0;
+const syncNow = () => {
+  syncFrame = 0;
+  overlay.style.left = `${canvas.offsetLeft}px`;
+  overlay.style.top = `${canvas.offsetTop}px`;
+  overlay.style.width = `${canvas.offsetWidth}px`;
+  overlay.style.height = `${canvas.offsetHeight}px`;
+};
+const scheduleSync = () => {
+  if (syncFrame === 0) syncFrame = requestAnimationFrame(syncNow);
+};
+const observer = new ResizeObserver(scheduleSync);
+observer.observe(canvas);
+observer.observe(stage);
+scheduleSync();
+return () => {
+  observer.disconnect();
+  if (syncFrame !== 0) cancelAnimationFrame(syncFrame);
+};
+```
+
+In `src/preview/preview.ts`, keep the current `resize()` math but schedule it separately from render work:
+
+```ts
+let resizeFrame = 0;
+const scheduleResize = (): void => {
+  if (resizeFrame !== 0 || disposed || contextLost) return;
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0;
+    resize();
+  });
+};
+const observer = new ResizeObserver(scheduleResize);
+observer.observe(container);
+scheduleResize();
+```
+
+In `dispose()`, cancel a non-zero `resizeFrame` before disconnecting the observer. Keep render scheduling and the `ResizeObserver` itself; do not poll dimensions or add a continuous render loop.
+
+- [ ] **Step 8: Run the responsive tests and the complete existing viewport/accessibility test**
 
 Run:
 
@@ -264,12 +314,12 @@ npx vitest run --project browser-chromium tests/browser/ui.test.ts
 npx playwright test tests/e2e/mobile-layout.spec.ts --project=chromium
 ```
 
-Expected: PASS; at 844x390 both stages exceed 80px, and at both 844x390 and 667x375 the toolbar is visible and body/document heights stay within one rounding pixel of `innerHeight`. Existing portrait and desktop behavior remains green.
+Expected: PASS; at 844x390 both stages exceed 80px, at both 844x390 and 667x375 the toolbar is visible and body/document heights stay within one rounding pixel of `innerHeight`, and portrait-to-landscape rotation emits no ResizeObserver loop page error. Existing portrait and desktop behavior remains green.
 
-- [ ] **Step 8: Commit the mobile blocker fix**
+- [ ] **Step 9: Commit the mobile blocker fix**
 
 ```bash
-git add src/editor/ui/designer-app.tsx src/editor/ui/editor-screen.tsx src/styles.css tests/browser/ui.test.ts tests/e2e/mobile-layout.spec.ts
+git add src/editor/ui/designer-app.tsx src/editor/ui/editor-screen.tsx src/editor/ui/workspace.tsx src/preview/preview.ts src/styles.css tests/browser/ui.test.ts tests/e2e/mobile-layout.spec.ts
 git commit -m "fix: make mobile landscape editor usable"
 ```
 
