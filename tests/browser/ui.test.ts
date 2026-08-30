@@ -309,8 +309,10 @@ test("adding paint above an existing cutout selects the new paint, and Preview c
   overlay.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }));
   await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "cutout selected");
   await addColor(host, 0);
-  await waitFor(() => host.querySelector(".segmented") !== null, "new paint selected");
-  expect(host.querySelector(".cutout-selection-label")).toBeNull();
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Color",
+    "new paint selected",
+  );
 
   toolbarButton(host, "Add").click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "second add sheet");
@@ -321,7 +323,7 @@ test("adding paint above an existing cutout selects the new paint, and Preview c
   await waitFor(() => host.querySelector(".cutout-instruction") === null, "preview tab cancels draw mode");
 }, 10000);
 
-test("adding a color creates one undoable item and Fill Clothing shows active", async () => {
+test("adding a color creates one undoable item and shows a Color label", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
   await addColor(host, 0);
@@ -342,9 +344,9 @@ test("adding a color creates one undoable item and Fill Clothing shows active", 
   await openItems(host);
   await waitFor(() => itemNames(host).length === 1, "redo restores item");
   expect(itemNames(host)).toEqual(["Color 1"]);
-  expect(segmentedButton(host, "Fill Clothing").getAttribute("aria-pressed")).toBe("true");
-  expect(segmentedButton(host, "Sticker").getAttribute("aria-pressed")).toBe("false");
-  expect(segmentedButton(host, "Repeat").getAttribute("aria-pressed")).toBe("false");
+  await closeSheet(host, "Items", "Done");
+  expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Color");
+  expect(host.querySelector(".segmented")).toBeNull();
 }, 10000);
 
 test("choosing another swatch with a color selected recolors it without adding an item", async () => {
@@ -449,10 +451,13 @@ test("items sheet supports rename, duplicate, visibility, reorder, and delete", 
   );
 
   itemRows(host)[0]?.click();
-  await waitFor(() => host.querySelector(".segmented") !== null, "selection shows segmented");
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Color",
+    "selection shows the color label",
+  );
   (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Delete"]'), "delete") as HTMLButtonElement).click();
   await waitFor(() => itemRows(host).length === 2, "delete removes item");
-  expect(host.querySelector(".segmented")).toBeNull();
+  expect(host.querySelector(".cutout-selection-label")).toBeNull();
 }, 15000);
 
 test("ninth add is refused with a friendly message", async () => {

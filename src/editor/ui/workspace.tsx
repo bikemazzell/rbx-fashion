@@ -105,6 +105,14 @@ function cutoutFootprint(layer: Extract<Layer, { kind: "cutout" }>, template: Te
   );
 }
 
+function solidFootprint(layer: Extract<Layer, { kind: "solid" }>, template: TemplateRegistryEntry) {
+  return footprintGeometry(
+    layer.transform,
+    { width: 1, height: 1 },
+    { width: template.width, height: template.height, inset: 16 },
+  );
+}
+
 function strokePolygon(
   ctx: CanvasRenderingContext2D,
   points: readonly Point[],
@@ -226,22 +234,25 @@ export function Workspace(props: WorkspaceProps) {
     }
     const lineWidth = Math.max(3, template.width / 160);
     overlayCtx.lineJoin = "round";
-    if (layer.kind === "raster" || layer.kind === "cutout") {
+    const isDecalSolid = layer.kind === "solid" && layer.placement === "decal";
+    if (layer.kind === "raster" || layer.kind === "cutout" || isDecalSolid) {
       const footprint =
         layer.kind === "cutout"
           ? cutoutFootprint(layer, template)
-          : layer.assetId === undefined
-            ? null
-            : (() => {
-                const asset = props.assets.get(layer.assetId);
-                return asset === undefined
-                  ? null
-                  : footprintGeometry(layer.transform, asset, {
-                      width: template.width,
-                      height: template.height,
-                      inset: 16,
-                    });
-              })();
+          : isDecalSolid
+            ? solidFootprint(layer, template)
+            : layer.assetId === undefined
+              ? null
+              : (() => {
+                  const asset = props.assets.get(layer.assetId);
+                  return asset === undefined
+                    ? null
+                    : footprintGeometry(layer.transform, asset, {
+                        width: template.width,
+                        height: template.height,
+                        inset: 16,
+                      });
+                })();
       if (footprint !== null) {
         strokePolygon(overlayCtx, footprint.corners, lineWidth);
         const topStart = footprint.corners[0];
@@ -257,6 +268,12 @@ export function Workspace(props: WorkspaceProps) {
         const handleRadius = Math.max(6, template.width / 60);
         drawHandle(overlayCtx, footprint.rotateHandle, handleRadius, "#ffffff");
         drawHandle(overlayCtx, footprint.scaleHandle, handleRadius, "#00c4ff");
+        if (layer.kind !== "raster") {
+          const sideRadius = Math.max(4, template.width / 100);
+          for (const edge of ["left", "right", "top", "bottom"] as const) {
+            drawHandle(overlayCtx, footprint.edgeHandles[edge], sideRadius, "#00c4ff");
+          }
+        }
       }
       return;
     }
@@ -323,14 +340,17 @@ export function Workspace(props: WorkspaceProps) {
         const layer = current.document.layers.find((candidate) => candidate.id === id);
         if (
           layer === undefined ||
-          (layer.kind !== "raster" && layer.kind !== "cutout") ||
-          !layer.visible
+          !layer.visible ||
+          (layer.kind === "solid" && layer.placement !== "decal")
         ) {
           return null;
         }
         const template = getTemplate(current.document.garmentType);
         if (layer.kind === "cutout") {
           return cutoutFootprint(layer, template);
+        }
+        if (layer.kind === "solid") {
+          return solidFootprint(layer, template);
         }
         if (layer.assetId === undefined) {
           return null;

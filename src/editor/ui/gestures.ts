@@ -354,12 +354,14 @@ export function createGestureController(options: GestureControllerOptions): { de
       }
       let nearestEdge: EdgeId | null = null;
       let nearestEdgeDistance = tolerance;
-      for (const edge of ["left", "right", "top", "bottom"] as const) {
-        const handle = selectedFootprint.edgeHandles[edge];
-        const distance = Math.hypot(point.x - handle.x, point.y - handle.y);
-        if (distance <= nearestEdgeDistance) {
-          nearestEdge = edge;
-          nearestEdgeDistance = distance;
+      if (selectedLayer !== undefined && selectedLayer.kind !== "raster") {
+        for (const edge of ["left", "right", "top", "bottom"] as const) {
+          const handle = selectedFootprint.edgeHandles[edge];
+          const distance = Math.hypot(point.x - handle.x, point.y - handle.y);
+          if (distance <= nearestEdgeDistance) {
+            nearestEdge = edge;
+            nearestEdgeDistance = distance;
+          }
         }
       }
       if (nearestEdge !== null) {

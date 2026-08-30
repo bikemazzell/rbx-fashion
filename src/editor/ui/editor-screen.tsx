@@ -176,6 +176,8 @@ export function EditorScreen(props: EditorScreenProps) {
               <div class="selection-bar">
                 {selected.kind === "cutout" ? (
                   <strong class="cutout-selection-label">Cut Out</strong>
+                ) : selected.kind === "solid" && selected.placement === "decal" ? (
+                  <strong class="cutout-selection-label">Color</strong>
                 ) : <div class="segmented" role="group" aria-label="Placement">
                   {PLACEMENTS.map(({ label, value }) => (
                     <button

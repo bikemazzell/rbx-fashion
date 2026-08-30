@@ -146,6 +146,23 @@ async function openMore(host: HTMLElement): Promise<void> {
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more sheet");
 }
 
+async function addColor(host: HTMLElement, swatchIndex: number): Promise<void> {
+  (byLabel(host, "Color") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null,
+    "color sheet",
+  );
+  const swatch = host.querySelectorAll('[role="dialog"][aria-label="Colors"] .swatch')[swatchIndex];
+  if (swatch === undefined) {
+    throw new Error(`missing swatch ${swatchIndex}`);
+  }
+  (swatch as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Colors"]') === null,
+    "color sheet to close",
+  );
+}
+
 function moreField(host: HTMLElement, label: string): number {
   const input = requireEl(
     host.querySelector(`[role="dialog"][aria-label="More"] [aria-label="${label}"]`),
@@ -574,6 +591,114 @@ test("the gesture overlay disables touch actions and paints handle glyphs", asyn
   expect(countColored(rotateData)).toBeGreaterThan(0);
 }, 10000);
 
+test("edge midpoint drags on a raster sticker move it instead of resizing one side", async () => {
+  const harness = createHarness("raster");
+  try {
+    harnessPointer(harness, "pointerdown", 1, 456, 256);
+    harnessPointer(harness, "pointermove", 1, 506, 256);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 506, 256);
+    expect(harness.mutations).toHaveLength(1);
+    expect(harness.mutations[0]?.op).toBe("patch-transform");
+    expect(harness.mutations[0]?.patch.scaleX).toBeUndefined();
+    expect(harness.mutations[0]?.patch.positionX).toBeCloseTo(306, 6);
+    expect(harness.mutations[0]?.patch.positionY).toBeCloseTo(256, 6);
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("color rectangles show side handles on the overlay and drag as one undo step", async () => {
+  const host = mountApp();
+  await startEditing(host, "T-Shirt");
+  await addColor(host, 0);
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Color",
+    "color rectangle selected",
+  );
+  const overlay = overlayEl(host);
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const ctx = overlay.getContext("2d");
+  if (ctx === null) {
+    throw new Error("2d context unavailable");
+  }
+  const solid = footprintGeometry(
+    { ...DECAL_DEFAULT, scaleX: 205, scaleY: 154 },
+    { width: 1, height: 1 },
+  );
+  for (const edge of [
+    solid.edgeHandles.left,
+    solid.edgeHandles.right,
+    solid.edgeHandles.top,
+    solid.edgeHandles.bottom,
+  ]) {
+    const pixel = toOverlayPixel(edge);
+    const data = ctx.getImageData(pixel.x - 3, pixel.y - 3, 6, 6).data;
+    expect(countColored(data)).toBeGreaterThan(0);
+  }
+
+  const empty = canvasToScreen(host, 10, 10);
+  pointer(host, "pointerdown", 1, empty.x, empty.y);
+  pointer(host, "pointerup", 1, empty.x, empty.y);
+  await waitFor(() => host.querySelector(".cutout-selection-label") === null, "deselected");
+  const center = canvasToScreen(host, 256, 256);
+  pointer(host, "pointerdown", 1, center.x, center.y);
+  pointer(host, "pointerup", 1, center.x, center.y);
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Color",
+    "tap reselects the color rectangle",
+  );
+
+  pointer(host, "pointerdown", 1, center.x, center.y);
+  pointer(host, "pointermove", 1, center.x + 80, center.y);
+  pointer(host, "pointerup", 1, center.x + 80, center.y);
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  clickUndo(host);
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Color",
+    "move undo keeps the rectangle selected",
+  );
+  clickUndo(host);
+  await waitFor(() => host.querySelector(".cutout-selection-label") === null, "second undo removes the rectangle");
+}, 10000);
+
+test("cutouts show side handles on the selection overlay", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  const start = canvasToScreen(host, 120, 100);
+  const end = canvasToScreen(host, 360, 280);
+  pointer(host, "pointerdown", 1, start.x, start.y);
+  pointer(host, "pointermove", 1, end.x, end.y);
+  pointer(host, "pointerup", 1, end.x, end.y);
+  await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "cutout selected");
+  const overlay = overlayEl(host);
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const ctx = overlay.getContext("2d");
+  if (ctx === null) {
+    throw new Error("2d context unavailable");
+  }
+  const cutout = footprintGeometry(
+    { ...DECAL_DEFAULT, positionX: 240, positionY: 190, scaleX: 240, scaleY: 180 },
+    { width: 1, height: 1 },
+  );
+  for (const edge of [
+    cutout.edgeHandles.left,
+    cutout.edgeHandles.right,
+    cutout.edgeHandles.top,
+    cutout.edgeHandles.bottom,
+  ]) {
+    const pixel = toOverlayPixel(edge);
+    const data = ctx.getImageData(pixel.x - 3, pixel.y - 3, 6, 6).data;
+    expect(countColored(data)).toBeGreaterThan(0);
+  }
+}, 10000);
+
 function countColored(data: Uint8ClampedArray): number {
   let count = 0;
   for (let index = 0; index < data.length; index += 4) {
@@ -885,7 +1010,7 @@ test("footprintGeometry reports edge midpoint handles in axis-aligned and rotate
 });
 
 test("side handle drags resize one edge, keep the opposite edge fixed, and commit once", async () => {
-  const harness = createHarness();
+  const harness = createHarness("solid");
   try {
     const drags: { down: [number, number]; up: [number, number]; expected: Record<string, number> }[] = [
       { down: [456, 256], up: [506, 256], expected: { scaleX: 500, positionX: 306, positionY: 256 } },
@@ -956,7 +1081,7 @@ test("side handle drags on a rotated cutout move the edge along the rotated axis
 }, 10000);
 
 test("side handle drags clamp to a small minimum when the pointer crosses the opposite edge", async () => {
-  const harness = createHarness();
+  const harness = createHarness("solid");
   try {
     harnessPointer(harness, "pointerdown", 1, 456, 256);
     harnessPointer(harness, "pointermove", 1, 100, 256);
@@ -972,7 +1097,7 @@ test("side handle drags clamp to a small minimum when the pointer crosses the op
 }, 10000);
 
 test("side handles win over the interior move drag within their 44px target", async () => {
-  const harness = createHarness();
+  const harness = createHarness("solid");
   try {
     harnessPointer(harness, "pointerdown", 1, 466, 262);
     harnessPointer(harness, "pointermove", 1, 516, 262);

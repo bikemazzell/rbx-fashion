@@ -492,7 +492,10 @@ test("a corrupted zip shows the child notice and leaves the project untouched", 
   const host = mountApp();
   await startEditing(host, "Shirt");
   await addColor(host, 3);
-  await waitFor(() => host.querySelector(".segmented") !== null, "solid selected");
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Color",
+    "solid selected",
+  );
   await waitFor(
     () => countOpaque(canvasData(workspaceCanvas(host))) > 0,
     "canvas painted before the open attempt",
@@ -509,7 +512,7 @@ test("a corrupted zip shows the child notice and leaves the project untouched", 
   );
   expect(requireEl(host.querySelector(".project-name"), "name").textContent).toBe("My Shirt");
   expect(await itemNames(host)).toEqual(["Color 1"]);
-  expect(host.querySelector(".segmented")).toBeTruthy();
+  expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Color");
   const pixelsAfter = canvasData(workspaceCanvas(host));
   expect(pixelsAfter.length).toBe(pixelsBefore.length);
   let unchanged = true;
