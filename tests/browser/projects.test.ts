@@ -228,7 +228,14 @@ async function garmentProject(
       crop: { x: 0, y: 0, width: 1, height: 1 },
     },
   };
-  project.layers = [solid, raster];
+  const cutout: Layer = {
+    id: "layer-3",
+    name: "Cut Out 1",
+    kind: "cutout",
+    visible: true,
+    rect: { centerX: project.garmentType === "tshirt" ? 256 : 292.5, centerY: project.garmentType === "tshirt" ? 256 : 279.5, width: 48, height: 36, rotationDeg: 12 },
+  };
+  project.layers = [solid, raster, cutout];
   project.assets = [
     {
       id: "asset-1",
@@ -308,7 +315,7 @@ test("createSessionFromDocument rebuilds a clean session with per-kind counters"
     redo: [],
     pending: null,
     dirty: false,
-    counters: { raster: 1, solid: 1 },
+    counters: { raster: 1, solid: 1, cutout: 1 },
   });
   expect(createSessionFromDocument({ ...document, layers: "no" } as unknown as ProjectDocument)).toBeNull();
 });
@@ -379,8 +386,8 @@ test("Open replaces the project content, store, selection, and megapixel budget"
     () => host.querySelector(".project-name")?.textContent === document.name,
     "project name swaps to opened document",
   );
-  expect(await itemNames(host)).toEqual(["Picture 1", "Color 1"]);
-  await waitFor(() => host.querySelector(".segmented") !== null, "top-most layer selected");
+  expect(await itemNames(host)).toEqual(["Cut Out 1", "Picture 1", "Color 1"]);
+  await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "top-most cutout selected");
   await waitFor(
     () => countOpaque(canvasData(workspaceCanvas(host))) > 1000,
     "opened raster paints the canvas",
@@ -743,7 +750,7 @@ test("Open Saved Project opens a valid archive without starting a throwaway garm
     () => host.querySelector(".project-name")?.textContent === document.name,
     "saved project opens from start",
   );
-  expect(await itemNames(host)).toEqual(["Picture 1", "Color 1"]);
+  expect(await itemNames(host)).toEqual(["Cut Out 1", "Picture 1", "Color 1"]);
 }, 15000);
 
 test("an invalid welcome-screen project leaves garment choices visible and explains the error", async () => {

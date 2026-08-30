@@ -439,6 +439,28 @@ test("updateCanvas repaints with the new texture content", async () => {
   }
 });
 
+test("transparent shirt pixels reveal the gray avatar body", async () => {
+  const harness = setup("shirt");
+  try {
+    const fixture = atlasFixture({ TL: RED, TR: RED, BL: RED, BR: RED });
+    const context = fixture.getContext("2d");
+    if (context === null) throw new Error("2d context unavailable");
+    context.clearRect(279, 122, 32, 32);
+    harness.handle.updateCanvas(fixture);
+    await settle();
+    const read = readPixels(harness.canvas);
+    const camera = makeCamera(DEFAULT_AZIMUTH, DEFAULT_ELEVATION, DEFAULT_DISTANCE);
+    const clearCenter = projectPoint(camera, read, new THREE.Vector3(0, 0, -0.5));
+    const paintedEdge = projectPoint(camera, read, new THREE.Vector3(0.4, 0, -0.5));
+    const body = sampleAt(read, clearCenter.x, clearCenter.y);
+    const red = sampleAt(read, paintedEdge.x, paintedEdge.y);
+    for (const channel of body) expect(Math.abs(channel - 217)).toBeLessThanOrEqual(10);
+    expectColorNear(red, RED, "opaque shirt beside cutout");
+  } finally {
+    harness.dispose();
+  }
+});
+
 test("tshirt decal covers the torso front with the upright quadrant texture", async () => {
   const harness = setup("tshirt");
   try {
