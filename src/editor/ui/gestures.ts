@@ -58,6 +58,12 @@ export function footprintGeometry(
   });
   const rawScaleHandle = map(halfWidth, halfHeight);
   const rawRotateHandle = map(0, -(halfHeight + ROTATE_HANDLE_OFFSET));
+  const rawEdgeHandles = {
+    left: map(-halfWidth, 0),
+    right: map(halfWidth, 0),
+    top: map(0, -halfHeight),
+    bottom: map(0, halfHeight),
+  };
   return {
     center: { x: transform.positionX, y: transform.positionY },
     rotationDeg: transform.rotationDeg,
@@ -71,12 +77,15 @@ export function footprintGeometry(
     ],
     scaleHandle: bounds === undefined ? rawScaleHandle : clampPoint(rawScaleHandle, bounds),
     rotateHandle: bounds === undefined ? rawRotateHandle : clampPoint(rawRotateHandle, bounds),
-    edgeHandles: {
-      left: map(-halfWidth, 0),
-      right: map(halfWidth, 0),
-      top: map(0, -halfHeight),
-      bottom: map(0, halfHeight),
-    },
+    edgeHandles:
+      bounds === undefined
+        ? rawEdgeHandles
+        : {
+            left: clampPoint(rawEdgeHandles.left, bounds),
+            right: clampPoint(rawEdgeHandles.right, bounds),
+            top: clampPoint(rawEdgeHandles.top, bounds),
+            bottom: clampPoint(rawEdgeHandles.bottom, bounds),
+          },
   };
 }
 
@@ -193,6 +202,7 @@ type ItemGesture =
       rotationDeg: number;
       startHalfWidth: number;
       startHalfHeight: number;
+      startLocal: number;
     });
 
 interface TapPending {
@@ -365,6 +375,13 @@ export function createGestureController(options: GestureControllerOptions): { de
         }
       }
       if (nearestEdge !== null) {
+        const edgeRad = (selectedFootprint.rotationDeg * Math.PI) / 180;
+        const edgeDx = point.x - selectedFootprint.center.x;
+        const edgeDy = point.y - selectedFootprint.center.y;
+        const startLocal =
+          nearestEdge === "left" || nearestEdge === "right"
+            ? edgeDx * Math.cos(edgeRad) + edgeDy * Math.sin(edgeRad)
+            : -edgeDx * Math.sin(edgeRad) + edgeDy * Math.cos(edgeRad);
         options.dispatch({ type: "begin-gesture" });
         itemGesture = {
           kind: "edge",
@@ -375,6 +392,7 @@ export function createGestureController(options: GestureControllerOptions): { de
           rotationDeg: selectedFootprint.rotationDeg,
           startHalfWidth: selectedFootprint.halfWidth,
           startHalfHeight: selectedFootprint.halfHeight,
+          startLocal,
           startTime: event.timeStamp,
           downX: event.clientX,
           downY: event.clientY,
@@ -557,20 +575,25 @@ export function createGestureController(options: GestureControllerOptions): { de
       const dy = point.y - gesture.center.y;
       const localX = dx * cos + dy * sin;
       const localY = -dx * sin + dy * cos;
-      const minHalf = MIN_ITEM_SCALE / 2;
       const patch: TransformPatch = {};
       let shiftX = 0;
       let shiftY = 0;
       if (gesture.edge === "left" || gesture.edge === "right") {
         const direction = gesture.edge === "right" ? 1 : -1;
-        const half = Math.max(minHalf, direction * localX);
-        shiftX = direction * (half - gesture.startHalfWidth);
-        patch.scaleX = half * 2;
+        const width = Math.max(
+          MIN_ITEM_SCALE,
+          2 * gesture.startHalfWidth + direction * (localX - gesture.startLocal),
+        );
+        shiftX = direction * (width / 2 - gesture.startHalfWidth);
+        patch.scaleX = width;
       } else {
         const direction = gesture.edge === "bottom" ? 1 : -1;
-        const half = Math.max(minHalf, direction * localY);
-        shiftY = direction * (half - gesture.startHalfHeight);
-        patch.scaleY = half * 2;
+        const height = Math.max(
+          MIN_ITEM_SCALE,
+          2 * gesture.startHalfHeight + direction * (localY - gesture.startLocal),
+        );
+        shiftY = direction * (height / 2 - gesture.startHalfHeight);
+        patch.scaleY = height;
       }
       const positionX = gesture.center.x + shiftX * cos - shiftY * sin;
       const positionY = gesture.center.y + shiftX * sin + shiftY * cos;

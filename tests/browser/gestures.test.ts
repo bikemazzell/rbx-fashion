@@ -1043,10 +1043,10 @@ test("side handle drags resize one edge, keep the opposite edge fixed, and commi
   const harness = createHarness("solid");
   try {
     const drags: { down: [number, number]; up: [number, number]; expected: Record<string, number> }[] = [
-      { down: [456, 256], up: [506, 256], expected: { scaleX: 500, positionX: 306, positionY: 256 } },
-      { down: [56, 256], up: [26, 256], expected: { scaleX: 460, positionX: 226, positionY: 256 } },
-      { down: [256, 106], up: [256, 76], expected: { scaleY: 360, positionX: 256, positionY: 226 } },
-      { down: [256, 406], up: [256, 456], expected: { scaleY: 400, positionX: 256, positionY: 306 } },
+      { down: [456, 256], up: [506, 256], expected: { scaleX: 450, positionX: 281, positionY: 256 } },
+      { down: [56, 256], up: [26, 256], expected: { scaleX: 430, positionX: 241, positionY: 256 } },
+      { down: [256, 106], up: [256, 76], expected: { scaleY: 330, positionX: 256, positionY: 241 } },
+      { down: [256, 406], up: [256, 456], expected: { scaleY: 350, positionX: 256, positionY: 281 } },
     ];
     for (const drag of drags) {
       harness.actions.length = 0;
@@ -1075,7 +1075,7 @@ test("side handle drags on a cutout patch the rect through cutout mutations", as
     expect(harness.actions).toContain("commit-gesture");
     expect(harness.mutations).toHaveLength(1);
     expect(harness.mutations[0]?.op).toBe("patch-cutout");
-    expect(harness.mutations[0]?.patch).toMatchObject({ width: 520, centerX: 316, centerY: 256 });
+    expect(harness.mutations[0]?.patch).toMatchObject({ width: 460, centerX: 286, centerY: 256 });
   } finally {
     harness.destroy();
   }
@@ -1089,7 +1089,7 @@ test("side handle drags on a decal solid patch the rectangle transform", async (
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     harnessPointer(harness, "pointerup", 1, 506, 256);
     expect(harness.actions).toEqual(["begin-gesture", "patch-transform", "commit-gesture"]);
-    expect(harness.mutations[0]?.patch).toMatchObject({ scaleX: 500, positionX: 306, positionY: 256 });
+    expect(harness.mutations[0]?.patch).toMatchObject({ scaleX: 450, positionX: 281, positionY: 256 });
   } finally {
     harness.destroy();
   }
@@ -1104,7 +1104,7 @@ test("side handle drags on a rotated cutout move the edge along the rotated axis
     harnessPointer(harness, "pointerup", 1, 256, 496);
     expect(harness.mutations).toHaveLength(1);
     expect(harness.mutations[0]?.op).toBe("patch-cutout");
-    expect(harness.mutations[0]?.patch).toMatchObject({ width: 480, centerX: 256, centerY: 296 });
+    expect(harness.mutations[0]?.patch).toMatchObject({ width: 440, centerX: 256, centerY: 276 });
   } finally {
     harness.destroy();
   }
@@ -1114,9 +1114,9 @@ test("side handle drags clamp to a small minimum when the pointer crosses the op
   const harness = createHarness("solid");
   try {
     harnessPointer(harness, "pointerdown", 1, 456, 256);
-    harnessPointer(harness, "pointermove", 1, 100, 256);
+    harnessPointer(harness, "pointermove", 1, 10, 256);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    harnessPointer(harness, "pointerup", 1, 100, 256);
+    harnessPointer(harness, "pointerup", 1, 10, 256);
     const patch = harness.mutations[0]?.patch;
     expect(patch?.scaleX).toBeCloseTo(0.01, 6);
     expect(patch?.positionX).toBeCloseTo(56.005, 6);
@@ -1135,7 +1135,7 @@ test("side handles win over the interior move drag within their 44px target", as
     harnessPointer(harness, "pointerup", 1, 516, 262);
     expect(harness.mutations).toHaveLength(1);
     expect(harness.mutations[0]?.op).toBe("patch-transform");
-    expect(harness.mutations[0]?.patch.scaleX).toBeCloseTo(520, 6);
+    expect(harness.mutations[0]?.patch.scaleX).toBeCloseTo(450, 6);
 
     harness.mutations.length = 0;
     harnessPointer(harness, "pointerdown", 1, 450, 258);
@@ -1143,8 +1143,8 @@ test("side handles win over the interior move drag within their 44px target", as
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     harnessPointer(harness, "pointerup", 1, 500, 258);
     expect(harness.mutations).toHaveLength(1);
-    expect(harness.mutations[0]?.patch.scaleX).toBeCloseTo(488, 6);
-    expect(harness.mutations[0]?.patch.positionX).toBeCloseTo(300, 6);
+    expect(harness.mutations[0]?.patch.scaleX).toBeCloseTo(450, 6);
+    expect(harness.mutations[0]?.patch.positionX).toBeCloseTo(281, 6);
   } finally {
     harness.destroy();
   }
