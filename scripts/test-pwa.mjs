@@ -194,15 +194,25 @@ async function run() {
         .waitFor({ state: "attached", timeout: 15000 });
       await page.getByRole("button", { name: "Color" }).click();
       await page.getByRole("button", { name: "Red", exact: true }).click();
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await page.getByRole("button", { name: "Cut Out", exact: true }).click();
+      const overlay = page.locator(".workspace-overlay");
+      const box = await overlay.boundingBox();
+      if (box === null) throw new Error("workspace overlay is unavailable");
+      await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.35);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.65, box.y + box.height * 0.65);
+      await page.mouse.up();
+      await page.locator(".cutout-selection-label").waitFor({ state: "visible" });
       if (await page.getByRole("button", { name: "Undo" }).isDisabled()) {
         fail("offline-editing", "Undo is disabled after adding a color item");
       }
       await openItemsSheet();
       const rowCount = await page.locator(".item-row").count();
-      if (rowCount !== 1) {
-        fail("offline-editing", `expected 1 item in the Items sheet, found ${rowCount}`);
+      if (rowCount !== 2) {
+        fail("offline-editing", `expected 2 items in the Items sheet, found ${rowCount}`);
       }
-      await page.getByLabel("Item name").fill("Offline Red");
+      await page.getByLabel("Item name").nth(1).fill("Offline Red");
       await page.keyboard.press("Enter");
       await page.getByRole("button", { name: "Done" }).click();
     });
@@ -247,13 +257,13 @@ async function run() {
         return undo !== null && undo.disabled;
       }, undefined, { timeout: 20000 });
       await openItemsSheet();
-      const itemName = await page.getByLabel("Item name").inputValue();
+      const itemName = await page.getByLabel("Item name").nth(1).inputValue();
       if (itemName !== "Offline Red") {
         fail("offline-projects", `reopened item name is ${JSON.stringify(itemName)}`);
       }
       const rowCount = await page.locator(".item-row").count();
-      if (rowCount !== 1) {
-        fail("offline-projects", `expected 1 item after reopen, found ${rowCount}`);
+      if (rowCount !== 2) {
+        fail("offline-projects", `expected 2 items after reopen, found ${rowCount}`);
       }
       await page.getByRole("button", { name: "Done" }).click();
     });

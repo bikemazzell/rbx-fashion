@@ -11,6 +11,17 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
   await expect(page.locator(".workspace-stage")).toBeVisible();
   await expect(page.locator(".preview-stage")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Tools" })).toBeVisible();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Cut Out", exact: true }).click();
+  const overlay = page.locator(".workspace-overlay");
+  const box = await overlay.boundingBox();
+  if (box === null) throw new Error("workspace overlay is missing");
+  const start = { clientX: box.x + box.width * 0.3, clientY: box.y + box.height * 0.3 };
+  const end = { clientX: box.x + box.width * 0.7, clientY: box.y + box.height * 0.7 };
+  await overlay.dispatchEvent("pointerdown", { pointerId: 1, pointerType: "touch", ...start });
+  await overlay.dispatchEvent("pointermove", { pointerId: 1, pointerType: "touch", ...end });
+  await overlay.dispatchEvent("pointerup", { pointerId: 1, pointerType: "touch", ...end });
+  await expect(page.locator(".cutout-selection-label")).toHaveText("Cut Out");
 
   const layout = await page.evaluate(() => {
     const rect = (selector: string) => {
