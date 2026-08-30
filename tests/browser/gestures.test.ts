@@ -647,7 +647,7 @@ interface Harness {
   destroy: () => void;
 }
 
-function createHarness(): Harness {
+function createHarness(kind: "raster" | "cutout" = "raster"): Harness {
   const host = document.createElement("div");
   host.style.cssText = "position:relative;width:600px;height:600px;";
   document.body.appendChild(host);
@@ -663,7 +663,7 @@ function createHarness(): Harness {
     ...session,
     document: {
       ...session.document,
-      layers: [
+      layers: kind === "raster" ? [
         {
           id: "item-1",
           name: "Picture 1",
@@ -681,6 +681,14 @@ function createHarness(): Harness {
             crop: { x: 0, y: 0, width: 1, height: 1 },
           },
         },
+      ] : [
+        {
+          id: "item-1",
+          name: "Cut Out 1",
+          kind: "cutout",
+          visible: true,
+          rect: { centerX: 256, centerY: 256, width: 400, height: 300, rotationDeg: 0 },
+        },
       ],
     },
   };
@@ -689,7 +697,7 @@ function createHarness(): Harness {
     canvasRect: () => ({ left: 0, top: 0, scale: 1 }),
     getSession: () => session,
     dispatch: (action) => {
-      actions.push(action.type);
+      actions.push(action.type === "update-gesture" ? action.mutation.op : action.type);
       session = harnessReduce(session, action);
     },
     onSelect: () => {},
@@ -719,6 +727,40 @@ function createHarness(): Harness {
     },
   };
 }
+
+test("cutout move, scale, rotate, and wheel gestures use cutout mutations", async () => {
+  const harness = createHarness("cutout");
+  try {
+    harnessPointer(harness, "pointerdown", 1, 256, 256);
+    harnessPointer(harness, "pointermove", 1, 300, 256);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 300, 256);
+    expect(harness.actions).toContain("begin-gesture");
+    expect(harness.actions).toContain("patch-cutout");
+    expect(harness.actions).toContain("commit-gesture");
+
+    harness.actions.length = 0;
+    harnessPointer(harness, "pointerdown", 1, 456, 406);
+    harnessPointer(harness, "pointermove", 1, 480, 430);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 480, 430);
+    expect(harness.actions).toContain("patch-cutout");
+
+    harness.actions.length = 0;
+    harness.overlay.dispatchEvent(
+      new WheelEvent("wheel", {
+        deltaY: -100,
+        clientX: 256,
+        clientY: 256,
+        cancelable: true,
+        bubbles: true,
+      }),
+    );
+    expect(harness.actions).toContain("patch-cutout");
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
 
 function harnessReduce(session: EditorSession, action: EditorAction): EditorSession {
   if (action.type === "begin-gesture") {

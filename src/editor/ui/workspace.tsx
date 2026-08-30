@@ -87,6 +87,21 @@ function selectionRect(layer: Layer, assets: AssetStore, template: TemplateRegis
   );
 }
 
+function cutoutFootprint(layer: Extract<Layer, { kind: "cutout" }>, template: TemplateRegistryEntry) {
+  return footprintGeometry(
+    {
+      positionX: layer.rect.centerX,
+      positionY: layer.rect.centerY,
+      rotationDeg: layer.rect.rotationDeg,
+      scaleX: 1,
+      scaleY: 1,
+      crop: { x: 0, y: 0, width: 1, height: 1 },
+    },
+    { width: layer.rect.width, height: layer.rect.height },
+    { width: template.width, height: template.height, inset: 16 },
+  );
+}
+
 function strokePolygon(
   ctx: CanvasRenderingContext2D,
   points: readonly Point[],
@@ -181,11 +196,23 @@ export function Workspace(props: WorkspaceProps) {
     }
     const lineWidth = Math.max(3, template.width / 160);
     overlayCtx.lineJoin = "round";
-    if (layer.kind === "raster" && layer.assetId !== undefined) {
-      const asset = props.assets.get(layer.assetId);
-      if (asset !== undefined) {
-        const handleBounds = { width: template.width, height: template.height, inset: 16 };
-        const footprint = footprintGeometry(layer.transform, asset, handleBounds);
+    if (layer.kind === "raster" || layer.kind === "cutout") {
+      const footprint =
+        layer.kind === "cutout"
+          ? cutoutFootprint(layer, template)
+          : layer.assetId === undefined
+            ? null
+            : (() => {
+                const asset = props.assets.get(layer.assetId);
+                return asset === undefined
+                  ? null
+                  : footprintGeometry(layer.transform, asset, {
+                      width: template.width,
+                      height: template.height,
+                      inset: 16,
+                    });
+              })();
+      if (footprint !== null) {
         strokePolygon(overlayCtx, footprint.corners, lineWidth);
         const topStart = footprint.corners[0];
         const topEnd = footprint.corners[1];
@@ -264,8 +291,16 @@ export function Workspace(props: WorkspaceProps) {
       itemFootprint: (id) => {
         const current = propsRef.current;
         const layer = current.document.layers.find((candidate) => candidate.id === id);
-        if (layer === undefined || layer.kind !== "raster" || !layer.visible) {
+        if (
+          layer === undefined ||
+          (layer.kind !== "raster" && layer.kind !== "cutout") ||
+          !layer.visible
+        ) {
           return null;
+        }
+        const template = getTemplate(current.document.garmentType);
+        if (layer.kind === "cutout") {
+          return cutoutFootprint(layer, template);
         }
         if (layer.assetId === undefined) {
           return null;
@@ -274,7 +309,6 @@ export function Workspace(props: WorkspaceProps) {
         if (asset === undefined) {
           return null;
         }
-        const template = getTemplate(current.document.garmentType);
         const handleBounds = { width: template.width, height: template.height, inset: 16 };
         return footprintGeometry(layer.transform, asset, handleBounds);
       },

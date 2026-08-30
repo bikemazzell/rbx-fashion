@@ -1,4 +1,4 @@
-import type { Transform } from "../../domain/types";
+import type { Layer, Transform } from "../../domain/types";
 import type { EditorAction, EditorSession, TransformPatch } from "../state";
 
 export interface Viewport {
@@ -95,6 +95,39 @@ const HANDLE_SCREEN_RADIUS = 22;
 const WHEEL_BURST_MS = 160;
 const WHEEL_SCALE_RATE = 0.0015;
 
+function editableTransform(layer: Layer | undefined): Transform | null {
+  if (layer === undefined || layer.kind === "solid") {
+    return null;
+  }
+  if (layer.kind === "raster") {
+    return layer.transform;
+  }
+  return {
+    positionX: layer.rect.centerX,
+    positionY: layer.rect.centerY,
+    rotationDeg: layer.rect.rotationDeg,
+    scaleX: layer.rect.width,
+    scaleY: layer.rect.height,
+    crop: { x: 0, y: 0, width: 1, height: 1 },
+  };
+}
+
+function cutoutPatchFromTransformPatch(patch: TransformPatch) {
+  const cutoutPatch: {
+    centerX?: number;
+    centerY?: number;
+    rotationDeg?: number;
+    width?: number;
+    height?: number;
+  } = {};
+  if (patch.positionX !== undefined) cutoutPatch.centerX = patch.positionX;
+  if (patch.positionY !== undefined) cutoutPatch.centerY = patch.positionY;
+  if (patch.rotationDeg !== undefined) cutoutPatch.rotationDeg = patch.rotationDeg;
+  if (patch.scaleX !== undefined) cutoutPatch.width = patch.scaleX;
+  if (patch.scaleY !== undefined) cutoutPatch.height = patch.scaleY;
+  return cutoutPatch;
+}
+
 function normalizedWheelDelta(event: WheelEvent, pageHeight: number): number {
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
   if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * pageHeight;
@@ -190,7 +223,11 @@ export function createGestureController(options: GestureControllerOptions): { de
     const layers = options.getSession().document.layers;
     for (let index = layers.length - 1; index >= 0; index -= 1) {
       const layer = layers[index];
-      if (layer === undefined || !layer.visible || layer.kind !== "raster") {
+      if (
+        layer === undefined ||
+        !layer.visible ||
+        (layer.kind !== "raster" && layer.kind !== "cutout")
+      ) {
         continue;
       }
       const footprint = options.itemFootprint(layer.id);
@@ -210,8 +247,7 @@ export function createGestureController(options: GestureControllerOptions): { de
       selectedId === null
         ? undefined
         : options.getSession().document.layers.find((layer) => layer.id === selectedId);
-    const transform =
-      selectedLayer === undefined || selectedLayer.kind === "cutout" ? null : selectedLayer.transform;
+    const transform = editableTransform(selectedLayer);
     if (selectedId !== null && selectedFootprint !== null && transform !== null) {
       const tolerance = handleRadiusCanvasPx();
       const rotateDistance = Math.hypot(
@@ -368,6 +404,19 @@ export function createGestureController(options: GestureControllerOptions): { de
     const pending = pendingUpdate;
     pendingUpdate = null;
     if (pending !== null) {
+      const layer = options.getSession().document.layers.find((candidate) => candidate.id === pending.id);
+      if (layer?.kind === "cutout") {
+        const patch = pending.patch;
+        options.dispatch({
+          type: "update-gesture",
+          mutation: {
+            op: "patch-cutout",
+            id: pending.id,
+            patch: cutoutPatchFromTransformPatch(patch),
+          },
+        });
+        return;
+      }
       options.dispatch({
         type: "update-gesture",
         mutation: { op: "patch-transform", id: pending.id, patch: pending.patch },
@@ -532,7 +581,11 @@ export function createGestureController(options: GestureControllerOptions): { de
     const id = options.selectedId();
     if (id === null) return;
     const layer = options.getSession().document.layers.find((candidate) => candidate.id === id);
-    if (layer === undefined || layer.kind !== "raster" || !layer.visible) return;
+    if (
+      layer === undefined ||
+      (layer.kind !== "raster" && layer.kind !== "cutout") ||
+      !layer.visible
+    ) return;
     const footprint = options.itemFootprint(id);
     if (footprint === null) return;
     const point = screenToCanvas(event.clientX, event.clientY);
@@ -548,7 +601,17 @@ export function createGestureController(options: GestureControllerOptions): { de
     const factor = Math.min(1.25, Math.max(0.8, Math.exp(-delta * WHEEL_SCALE_RATE)));
     options.dispatch({
       type: "update-gesture",
-      mutation: { op: "patch-transform", id, patch: scaleBy(layer.transform, factor) },
+      mutation:
+        layer.kind === "cutout"
+          ? {
+              op: "patch-cutout",
+              id,
+              patch: {
+                width: Math.max(MIN_ITEM_SCALE, layer.rect.width * factor),
+                height: Math.max(MIN_ITEM_SCALE, layer.rect.height * factor),
+              },
+            }
+          : { op: "patch-transform", id, patch: scaleBy(layer.transform, factor) },
     });
     if (wheelCommitTimer !== null) window.clearTimeout(wheelCommitTimer);
     wheelCommitTimer = window.setTimeout(finishWheelGesture, WHEEL_BURST_MS);
@@ -563,10 +626,15 @@ export function createGestureController(options: GestureControllerOptions): { de
       return;
     }
     const layer = options.getSession().document.layers.find((candidate) => candidate.id === id);
-    if (layer === undefined || layer.kind !== "raster" || !layer.visible) {
+    if (
+      layer === undefined ||
+      (layer.kind !== "raster" && layer.kind !== "cutout") ||
+      !layer.visible
+    ) {
       return;
     }
-    const transform = layer.transform;
+    const transform = editableTransform(layer);
+    if (transform === null) return;
     const step = event.shiftKey ? 10 : 1;
     let patch: TransformPatch;
     switch (event.key) {
@@ -601,7 +669,15 @@ export function createGestureController(options: GestureControllerOptions): { de
     }
     event.preventDefault();
     finishWheelGesture();
-    options.dispatch({ type: "patch-transform", id, patch });
+    if (layer.kind === "cutout") {
+      options.dispatch({
+        type: "patch-cutout",
+        id,
+        patch: cutoutPatchFromTransformPatch(patch),
+      });
+    } else {
+      options.dispatch({ type: "patch-transform", id, patch });
+    }
   };
 
   overlay.addEventListener("pointerdown", onPointerDown);
