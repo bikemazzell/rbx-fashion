@@ -156,6 +156,47 @@ async function drawTShirtFixture(page, spec) {
   }, spec);
 }
 
+async function drawAlphaFixture(page, spec) {
+  return page.evaluate((fixture) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = fixture.width;
+    canvas.height = fixture.height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (ctx === null) throw new Error("2d context unavailable");
+    ctx.fillStyle = "#ff2d75";
+    ctx.fillRect(0, 0, fixture.width, fixture.height);
+    ctx.fillStyle = "#00d4ff";
+    ctx.fillRect(fixture.x - 8, fixture.y - 8, fixture.w + 16, fixture.h + 16);
+    ctx.clearRect(fixture.x, fixture.y, fixture.w, fixture.h);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("ALPHA 0", fixture.x + fixture.w / 2, Math.max(20, fixture.y - 12));
+    const clear = ctx.getImageData(fixture.x + fixture.w / 2, fixture.y + fixture.h / 2, 1, 1).data[3];
+    const opaque = ctx.getImageData(1, 1, 1, 1).data[3];
+    if (clear !== 0 || opaque !== 255) {
+      throw new Error(`alpha fixture samples invalid: clear=${clear} opaque=${opaque}`);
+    }
+    return canvas.toDataURL("image/png");
+  }, spec);
+}
+
+function alphaSpec(entry) {
+  if (entry.garment === "tshirt") {
+    return { width: entry.width, height: entry.height, x: 176, y: 176, w: 160, h: 160 };
+  }
+  const front = entry.panels.find((panel) => panel.id === "torso.front");
+  if (front === undefined) throw new Error(`${entry.garment}: missing torso.front panel`);
+  return {
+    width: entry.width,
+    height: entry.height,
+    x: front.atlasRect.x + 32,
+    y: front.atlasRect.y + 32,
+    w: front.atlasRect.width - 64,
+    h: front.atlasRect.height - 64,
+  };
+}
+
 function verifyPng(path, expectedWidth, expectedHeight) {
   const problems = [];
   let bytes;
@@ -193,6 +234,14 @@ try {
     height: SHIRT_ENTRY.height,
     dataUrl: await drawAtlasFixture(page, atlasSpec(SHIRT_ENTRY)),
   });
+  for (const entry of [SHIRT_ENTRY, PANTS_ENTRY, TSHIRT_ENTRY]) {
+    outputs.push({
+      name: `${entry.garment}-alpha.png`,
+      width: entry.width,
+      height: entry.height,
+      dataUrl: await drawAlphaFixture(page, alphaSpec(entry)),
+    });
+  }
   outputs.push({
     name: "pants.png",
     width: PANTS_ENTRY.width,
@@ -228,5 +277,5 @@ for (const output of outputs) {
 if (failed) {
   process.exitCode = 1;
 } else {
-  console.log("calibration fixtures: 3 generated, PNG self-verification passed");
+  console.log("calibration fixtures: 6 generated, PNG self-verification passed");
 }

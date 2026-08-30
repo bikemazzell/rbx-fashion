@@ -7,7 +7,7 @@ Build a small, mobile-first website that lets an 8–10-year-old create Roblox c
 The child-facing workflow is:
 
 1. Pick T-shirt, Shirt, or Pants.
-2. Add a picture, choose a color, or—when a parent has enabled it—generate a simple AI pattern.
+2. Add a picture, choose a color, draw a rectangular Cut Out, or—when a parent has enabled it—generate a simple AI pattern.
 3. Choose Sticker, Repeat, or Fill Clothing.
 4. Drag, resize, rotate, crop, and adjust the result while seeing it on the 2D template.
 5. Check it on one simple block-avatar preview and download a Roblox-ready PNG.
@@ -159,15 +159,17 @@ interface AssetManifestEntry {
   prompt?: string;
 }
 
-interface ProjectDocumentV1 {
+interface ProjectDocument {
   format: "rbx-fashion-project";
-  schemaVersion: 1;
+  schemaVersion: 2;
   name: string;
   garmentType: GarmentType;
   layers: Layer[];
   assets: AssetManifestEntry[];
 }
 ```
+
+Version 2 adds `CutoutLayer`, which stores only an ID, name, visibility, and finite positive rectangle geometry. Paint layers always precede the cutout suffix so visible cutouts erase the finished composition regardless of artwork order. Valid version-1 projects migrate to version 2 in memory when opened; new saves always use version 2.
 
 Garment type is fixed for an open project. Changing garment creates a new project; existing layers are never silently reinterpreted.
 
@@ -203,6 +205,7 @@ Use the exact crop and center-pivot Canvas transform semantics in the technical 
 - Repeat enumerates source tiles in internal garment space and clips them across the official panels, preserving continuity across declared atlas seams.
 - Fill Clothing maps the source over the complete canonical canvas. A canonical-size Roblox map defaults to scale 1; another source defaults to fit the canvas.
 - A repeated solid color uses direct clipped fills rather than enumerating 1×1 tiles.
+- Visible rectangular cutouts run after every paint layer using Canvas `destination-out`. Their clear interior is alpha 0; rotated edges may contain antialiasing alpha. The checkerboard, draft, outline, and handles are editor-only UI and never enter the compositor.
 
 For raster patterns, allow at most 4,096 tile draws for one layer and 16,384 for one composition. If exceeded, show “Pattern is too small—make it larger” and block export until corrected.
 
@@ -218,6 +221,8 @@ assets/<asset-id>.png
 Project save calculates the expanded payload before compression and rejects anything over 128 MiB. It then rejects a compressed result over 50 MiB, so every successfully saved project is eligible to reopen under the same limits. Project import validates the schema version, eight-layer limit, normalized paths, entry and byte limits, PNG headers, dimensions, byte lengths, and SHA-256 hashes before replacing the current document.
 
 Export produces an sRGB PNG at exactly 512×512 or 585×559. Preflight re-decodes the result and verifies its MIME type, dimensions, nonempty pixel data, and alpha range. A completely transparent result produces a child-readable warning before download. The application explains that Roblox moderation and unsupported avatar packages are outside its control and recommends testing the image in Roblox Studio.
+
+Classic T-shirts are front graphics, so cutting them does not change the avatar silhouette. Shirt and Pants alpha is intended to reveal the body, but current Roblox classic-clothing documentation does not explicitly guarantee that runtime behavior; the alpha fixtures and Studio checklist retain it as a manual compatibility gate. Freehand masks, feathering, shape presets, and 3D geometry editing are deferred.
 
 ### R6 preview and calibration
 

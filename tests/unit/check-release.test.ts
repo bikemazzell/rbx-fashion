@@ -104,6 +104,7 @@ function fillResultCells(source: string): string {
 
 function writeEvidenceTree(root: string, checklistText: string): void {
   mkdirSync(join(root, "calibration", "evidence", "captures"), { recursive: true });
+  mkdirSync(join(root, "calibration", "fixtures"), { recursive: true });
   mkdirSync(join(root, "src", "domain"), { recursive: true });
   writeFileSync(join(root, "calibration", "evidence", "r6-checklist-completed.md"), checklistText);
   writeFileSync(join(root, "calibration", "evidence", "measurements.json"), validMeasurements());
@@ -114,6 +115,7 @@ function writeEvidenceTree(root: string, checklistText: string): void {
   };
   for (const garment of GARMENTS) {
     const [width, height] = CAPTURE_DIMENSIONS[garment];
+    writeFileSync(join(root, "calibration", "fixtures", `${garment}-alpha.png`), evidencePng(width, height));
     for (const source of SOURCES) {
       for (const view of VIEWS) {
         writeFileSync(
@@ -136,15 +138,31 @@ test("current repo fails the release gate with calibration failures", () => {
   expect(result.failures.some((failure) => failure.includes("measurements.json"))).toBe(true);
   expect(result.failures.some((failure) => failure.includes("calibration/evidence"))).toBe(true);
   expect(result.failures.some((failure) => failure.includes("calibrationVersion: null"))).toBe(true);
+  expect(result.failures.some((failure) => failure.includes("shirt-alpha.png"))).toBe(false);
+});
+
+test("missing alpha fixture fails naming the garment fixture", () => {
+  const template = readFileSync(join(repoRoot, "calibration", "r6-checklist.md"), "utf8");
+  const completed = fillResultCells(template).replace("RESULT: PENDING", "RESULT: PASS");
+  const root = mkdtempSync(join(tmpdir(), "rbx-check-release-"));
+  try {
+    writeEvidenceTree(root, `${completed}\n`);
+    rmSync(join(root, "calibration", "fixtures", "pants-alpha.png"));
+    const result = runReleaseCheck(root);
+    expect(result.ok).toBe(false);
+    expect(result.failures.some((failure) => failure.includes("pants-alpha.png"))).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("CLI exits 1 with calibration wording when evidence is missing", () => {
-  const run = spawnSync(process.execPath, ["scripts/check-release.mjs"], {
+  const run = spawnSync(process.execPath, [join(repoRoot, "scripts", "check-release.mjs")], {
     cwd: repoRoot,
     encoding: "utf8",
   });
   expect(run.status).toBe(1);
-  expect(run.stdout.toLowerCase().includes("calibration")).toBe(true);
+  expect(`${run.stdout}\n${run.stderr}`.toLowerCase(), JSON.stringify(run.error)).toContain("calibration");
 });
 
 test("valid fabricated evidence tree passes the gate", () => {

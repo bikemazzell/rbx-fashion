@@ -54,6 +54,8 @@ Roblox describes 512x512 as an example square T-shirt size rather than an exclus
 
 The T-shirt canvas uses the same top-left, Y-down pixel-edge convention as the larger atlas. It has one logical target, `torso-graphic`, covering `0,0,512,512`. In 3D it is a front-torso graphic rather than six-face wrapping clothing, and its exact R6 placement is part of MVP Studio calibration. R15 placement is deferred.
 
+The official classic-clothing page documents PNG/JPEG input, garment categories, template dimensions, and Studio testing. Its current text does not explicitly specify how alpha-zero pixels on classic `Shirt`, `Pants`, or `ShirtGraphic` objects render. The downloaded official 585×559 shirt and pants template PNGs are RGBA but fully opaque. Separate `SurfaceAppearance` alpha documentation describes PBR textures and is not evidence for classic clothing. The editor therefore emits ordinary RGBA PNG alpha correctly and verifies its own 2D/3D pipeline automatically, while actual Roblox classic-clothing alpha behavior remains a Studio compatibility check.
+
 ## Canonical atlas coordinates
 
 All registry rectangles use output-pixel edge coordinates:
@@ -347,7 +349,7 @@ Calibration is compatibility testing, not a runtime dependency. It must be compl
 
 ### Inputs
 
-Generate two transparent 585x559 PNG fixtures, one shirt and one pants, plus one 512x512 T-shirt fixture. Every named shirt/pants panel must contain:
+Generate the three orientation fixtures plus deterministic `shirt-alpha.png`, `pants-alpha.png`, and `tshirt-alpha.png` fixtures. Every named shirt/pants orientation panel must contain:
 
 - A unique high-contrast color.
 - Its short panel ID.

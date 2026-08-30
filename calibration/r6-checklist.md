@@ -92,11 +92,22 @@ At each physical 3D edge below, the two listed panel edges must meet with their 
 
 Cut-seam note: every other physical cube edge joins different unfolded regions of the atlas; mismatched edge numbers there are EXPECTED. Mark such edges as cut in `Notes`, not as failures.
 
+## Alpha transparency
+
+Use the matching `*-alpha.png` fixture. Record what actually happens; do not mark PASS merely because the web preview reveals its gray body.
+
+| Garment | Required observation | Result | Notes |
+| --- | --- | --- | --- |
+| Shirt | Alpha-zero torso-front rectangle reveals the R6 body; cyan opaque border remains visible. | | |
+| Pants | Alpha-zero torso-front rectangle reveals the R6 body; cyan opaque border remains visible. | | |
+| T-shirt | Alpha-zero center affects only the front graphic and does not imply a changed garment silhouette; cyan opaque border remains visible. | | |
+
 ## Recording
 
 - Studio version:
 - Date:
 - `Humanoid.RigType`:
 - Reviewer:
+- Alpha capture names and observed behavior:
 
 RESULT: PENDING

@@ -6,6 +6,7 @@ Lean, mobile-first editor for designing Roblox classic clothing (shirt/pants tem
 
 - Start with T-Shirt for a front-only picture, Shirt for body-and-arm wrapping, or Pants for waist-and-leg wrapping. Open Saved Project reopens a local `.rbxcloth.zip` without starting a new garment.
 - In Edit, drag a selected picture to move it, use its cyan handle to resize, its white handle to rotate, or use the mouse wheel/trackpad over the picture to resize it.
+- To make part of the clothing see-through, choose **Add → Cut Out**, then drag a rectangle. Move it, resize it with the cyan handle, rotate it with the white handle, or fine-tune it in More. The checkerboard marks transparent pixels.
 - In Preview, drag to rotate the avatar and pinch or use the mouse wheel/trackpad to zoom. Reset restores the default view.
 - Save downloads an editable `.rbxcloth.zip`; Export downloads the Roblox-sized PNG. The app stores neither file nor API key after the browser session ends.
 
@@ -42,7 +43,7 @@ The AI pattern generator requires an operator-supplied proxy runtime, deployed s
 
 ## Release gates
 
-`npm run check:release` verifies the R6 calibration evidence: `calibration/evidence/measurements.json` with the required fields, all 36 capture PNGs (3 garments × 2 sources × 6 views, each with IHDR dimensions matching the template — 585×559 for shirt/pants, 512×512 for the T-shirt), the completed checklist at `calibration/evidence/r6-checklist-completed.md`, and a registry `calibrationVersion` recorded from a passing calibration. Producing that evidence requires manual Roblox Studio work per the procedure in `calibration/README.md`, so `check:release` fails until that evidence exists — by design — and CI deliberately excludes it.
+`npm run check:release` verifies the three generated alpha fixtures and the R6 calibration evidence: `calibration/evidence/measurements.json` with the required fields, all 36 capture PNGs (3 garments × 2 sources × 6 views, each with IHDR dimensions matching the template — 585×559 for shirt/pants, 512×512 for the T-shirt), the completed checklist at `calibration/evidence/r6-checklist-completed.md`, and a registry `calibrationVersion` recorded from a passing calibration. Producing that evidence requires manual Roblox Studio work per the procedure in `calibration/README.md`, so `check:release` fails until that evidence exists — by design — and CI deliberately excludes it.
 
 Also manual external gates before a real release, outside CI: physical iOS Safari and Android Chrome editing/export smoke tests, and one Roblox Studio/Creator Dashboard upload test per garment.
 

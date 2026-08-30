@@ -103,6 +103,27 @@ function checkCaptures(evidenceDir, source, failures) {
   }
 }
 
+function checkAlphaFixtures(repoRoot, failures) {
+  for (const garment of GARMENTS) {
+    const rel = `calibration/fixtures/${garment}-alpha.png`;
+    try {
+      const bytes = readFileSync(join(repoRoot, rel));
+      if (bytes.length < 24 || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
+        failures.push(`${rel}: empty, truncated, or missing PNG signature`);
+        continue;
+      }
+      const [expectedWidth, expectedHeight] = CAPTURE_DIMENSIONS[garment];
+      const width = bytes.readUInt32BE(16);
+      const height = bytes.readUInt32BE(20);
+      if (width !== expectedWidth || height !== expectedHeight) {
+        failures.push(`${rel}: IHDR dimensions ${width}x${height} do not match expected ${expectedWidth}x${expectedHeight}`);
+      }
+    } catch {
+      failures.push(`${rel}: missing or unreadable — regenerate with npm run calibration:fixtures`);
+    }
+  }
+}
+
 function checkChecklist(evidenceDir, failures) {
   const rel = "calibration/evidence/r6-checklist-completed.md";
   const file = readText(join(evidenceDir, "r6-checklist-completed.md"), rel);
@@ -170,6 +191,7 @@ export function runReleaseCheck(repoRoot) {
     );
   }
   checkMeasurements(evidenceDir, failures);
+  checkAlphaFixtures(repoRoot, failures);
   for (const source of SOURCES) {
     checkCaptures(evidenceDir, source, failures);
   }
