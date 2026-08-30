@@ -356,6 +356,10 @@ function roundCrop(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
+function isDecalSolid(layer: Layer): boolean {
+  return layer.kind === "solid" && layer.placement === "decal";
+}
+
 function fieldValue(layer: Layer, key: FieldKey): string {
   if (layer.kind === "cutout") {
     switch (key) {
@@ -390,7 +394,9 @@ function fieldValue(layer: Layer, key: FieldKey): string {
     case "turn":
       return String(Math.round(transform.rotationDeg));
     case "size":
-      return String(Math.round(((transform.scaleX + transform.scaleY) / 2) * 100));
+      return isDecalSolid(layer)
+        ? String(Math.round((transform.scaleX + transform.scaleY) / 2))
+        : String(Math.round(((transform.scaleX + transform.scaleY) / 2) * 100));
     case "wide":
       return String(Math.round(transform.scaleX * 100));
     case "tall":
@@ -450,7 +456,13 @@ function commitField(props: MoreSheetProps, key: FieldKey, value: number): void 
       break;
     case "size":
       if (value > 0) {
-        props.onTransformCommit({ scaleX: value / 100, scaleY: value / 100 });
+        if (props.layer.kind === "solid") {
+          const average = (transform.scaleX + transform.scaleY) / 2;
+          const ratio = value / average;
+          props.onTransformCommit({ scaleX: transform.scaleX * ratio, scaleY: transform.scaleY * ratio });
+        } else {
+          props.onTransformCommit({ scaleX: value / 100, scaleY: value / 100 });
+        }
       }
       break;
     case "wide":
@@ -517,9 +529,11 @@ export function MoreSheet(props: MoreSheetProps) {
   };
 
   const visibleFields = layer.kind === "solid"
-    ? FIELDS.filter((field) => field.key === "see")
+    ? isDecalSolid(layer)
+      ? FIELDS.filter((field) => field.key !== "wide" && field.key !== "tall")
+      : FIELDS.filter((field) => field.key === "see")
     : layer.kind === "cutout"
-      ? FIELDS.filter((field) => field.key !== "see")
+      ? FIELDS.filter((field) => ["left", "up", "turn", "size"].includes(field.key))
       : FIELDS;
 
   useEffect(() => {

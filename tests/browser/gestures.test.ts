@@ -171,6 +171,15 @@ function moreField(host: HTMLElement, label: string): number {
   return Number(input.value);
 }
 
+function setMoreField(host: HTMLElement, label: string, value: string): void {
+  const input = requireEl(
+    host.querySelector(`[role="dialog"][aria-label="More"] [aria-label="${label}"]`),
+    `more field ${label}`,
+  ) as HTMLInputElement;
+  input.value = value;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function clickUndo(host: HTMLElement): void {
   (byLabel(host, "Undo") as HTMLButtonElement).click();
 }
@@ -245,10 +254,11 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   await waitFor(() => host.querySelector(".cutout-instruction") === null, "drawing completes");
   expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Cut Out");
   await openMore(host);
-  expect(moreField(host, "Wide")).toBe(240);
-  expect(moreField(host, "Tall")).toBe(180);
+  expect(moreField(host, "Size")).toBe(210);
   expect(moreField(host, "Left/Right")).toBe(240);
   expect(moreField(host, "Up/Down")).toBe(190);
+  expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Wide"]')).toBeNull();
+  expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Tall"]')).toBeNull();
   (byLabel(host, "Done") as HTMLButtonElement).click();
 
   (byLabel(host, "Add") as HTMLButtonElement).click();
@@ -260,8 +270,28 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   pointer(host, "pointerup", 1, tap.x, tap.y);
   await waitFor(() => host.querySelector(".cutout-instruction") === null, "tap completes");
   await openMore(host);
-  expect(moreField(host, "Wide")).toBeGreaterThan(20);
-  expect(moreField(host, "Tall")).toBeGreaterThan(20);
+  expect(moreField(host, "Size")).toBeGreaterThan(20);
+  expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Wide"]')).toBeNull();
+  expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Tall"]')).toBeNull();
+}, 10000);
+
+test("color rectangle Size commits uniformly in pixels and undoes in one step", async () => {
+  const host = mountApp();
+  await startEditing(host, "T-Shirt");
+  await addColor(host, 0);
+  await openMore(host);
+  expect(moreField(host, "Size")).toBe(180);
+  expect(moreField(host, "Left/Right")).toBe(256);
+  expect(moreField(host, "Up/Down")).toBe(256);
+  setMoreField(host, "Size", "240");
+  await waitFor(() => moreField(host, "Size") === 240, "uniform size commit");
+  expect(moreField(host, "Left/Right")).toBe(256);
+  expect(moreField(host, "Up/Down")).toBe(256);
+  (byLabel(host, "Done") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') === null, "more closes");
+  clickUndo(host);
+  await openMore(host);
+  await waitFor(() => moreField(host, "Size") === 180, "undo restores the original size");
 }, 10000);
 
 test("Escape during an active cutout drag discards it even after pointer-up", async () => {

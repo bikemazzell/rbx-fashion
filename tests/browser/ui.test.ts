@@ -257,8 +257,10 @@ test("a new editor points to Add and disables Repeat until a visible picture is 
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more");
   const more = dialog(host, "More");
   expect(Array.from(more.querySelectorAll("input")).map((input) => input.getAttribute("aria-label"))).toEqual([
-    "See-through",
+    "Left/Right", "Up/Down", "Turn", "Size", "See-through",
   ]);
+  expect(more.querySelector('[aria-label="Wide"]')).toBeNull();
+  expect(more.querySelector('[aria-label="Tall"]')).toBeNull();
 });
 
 test("cutouts have focused controls, visible transparency, and no dead reorder buttons", async () => {
@@ -284,9 +286,12 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
 
   moreButton(host).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "cutout more");
-  expect(Array.from(dialog(host, "More").querySelectorAll("input")).map((input) => input.getAttribute("aria-label"))).toEqual([
-    "Left/Right", "Up/Down", "Turn", "Size", "Wide", "Tall",
+  const cutoutMore = dialog(host, "More");
+  expect(Array.from(cutoutMore.querySelectorAll("input")).map((input) => input.getAttribute("aria-label"))).toEqual([
+    "Left/Right", "Up/Down", "Turn", "Size",
   ]);
+  expect(cutoutMore.querySelector('[aria-label="Wide"]')).toBeNull();
+  expect(cutoutMore.querySelector('[aria-label="Tall"]')).toBeNull();
   await closeSheet(host, "More", "Done");
   await openItems(host);
   expect(itemNames(host)[0]).toBe("Cut Out 1");

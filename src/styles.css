@@ -685,6 +685,20 @@ button {
 .more-sheet .more-form {
   min-height: 0;
   overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  align-content: start;
+}
+
+.more-sheet .field {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.more-sheet .field input {
+  width: 100%;
 }
 
 .more-sheet-done {
@@ -715,6 +729,7 @@ button {
 }
 
 .field-group {
+  grid-column: 1 / -1;
   margin: 0.5rem 0 0;
   font-size: 1rem;
 }
