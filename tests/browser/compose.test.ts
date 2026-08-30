@@ -68,6 +68,24 @@ function solidLayer(
   };
 }
 
+function cutoutLayer(
+  id: string,
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  rotationDeg = 0,
+  visible = true,
+): Layer {
+  return {
+    id,
+    name: id,
+    kind: "cutout",
+    visible,
+    rect: { centerX, centerY, width, height, rotationDeg },
+  };
+}
+
 function projectDoc(garmentType: GarmentType, layers: Layer[]): ProjectDocument {
   const doc = createProject(garmentType);
   doc.layers = layers;
@@ -343,6 +361,62 @@ test("later layers composite over earlier layers", async () => {
   ]);
   const { canvas } = composeProject({ document: doc, assets: new AssetStore() });
   expectPixel(ctx2d(canvas), 10, 10, [0, 0, 255, 255]);
+});
+
+test.each(["tshirt", "shirt", "pants"] as const)(
+  "a visible cutout clears %s after all artwork while preserving exterior pixels",
+  (garment) => {
+    const template = getTemplate(garment);
+    const defaults = defaultTransform("full-map", { width: 1, height: 1 }, template);
+    const centerX = Math.floor(template.width / 2);
+    const centerY = Math.floor(template.height / 2);
+    const doc = projectDoc(garment, [
+      solidLayer("red", "#ff0000", "full-map", transform(defaults)),
+      cutoutLayer("hole", centerX, centerY, 80, 60),
+    ]);
+    const { canvas } = composeProject({ document: doc, assets: new AssetStore() });
+    const ctx = ctx2d(canvas);
+    expectTransparent(ctx, centerX, centerY);
+    expectPixel(ctx, 2, 2, [255, 0, 0, 255]);
+  },
+);
+
+test("cutouts are final masks regardless of array order and hidden cutouts do nothing", () => {
+  const defaults = defaultTransform("full-map", { width: 1, height: 1 }, getTemplate("tshirt"));
+  const adversarial = projectDoc("tshirt", [
+    cutoutLayer("hole", 256, 256, 100, 100),
+    solidLayer("later", "#00ff00", "full-map", transform(defaults)),
+  ]);
+  expectTransparent(
+    ctx2d(composeProject({ document: adversarial, assets: new AssetStore() }).canvas),
+    256,
+    256,
+  );
+
+  const hidden = projectDoc("tshirt", [
+    solidLayer("green", "#00ff00", "full-map", transform(defaults)),
+    cutoutLayer("hidden", 256, 256, 100, 100, 0, false),
+  ]);
+  expectPixel(
+    ctx2d(composeProject({ document: hidden, assets: new AssetStore() }).canvas),
+    256,
+    256,
+    [0, 255, 0, 255],
+  );
+});
+
+test("overlapping rotated cutouts erase their union", () => {
+  const defaults = defaultTransform("full-map", { width: 1, height: 1 }, getTemplate("tshirt"));
+  const doc = projectDoc("tshirt", [
+    solidLayer("base", "#0000ff", "full-map", transform(defaults)),
+    cutoutLayer("straight", 220, 256, 80, 40),
+    cutoutLayer("rotated", 292, 256, 80, 40, 90),
+  ]);
+  const ctx = ctx2d(composeProject({ document: doc, assets: new AssetStore() }).canvas);
+  expectTransparent(ctx, 220, 256);
+  expectTransparent(ctx, 292, 256);
+  expectTransparent(ctx, 292, 280);
+  expectPixel(ctx, 20, 20, [0, 0, 255, 255]);
 });
 
 test("a 4px tile pattern exceeds the per-layer budget and fails with the exact message", async () => {

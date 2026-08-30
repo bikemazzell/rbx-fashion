@@ -56,6 +56,18 @@ function validateDocument(doc: ProjectDocument, assets: AssetStore): void {
   }
   for (const [index, layer] of doc.layers.entries()) {
     if (layer.kind === "cutout") {
+      const rect = layer.rect;
+      if (
+        !Number.isFinite(rect.centerX) ||
+        !Number.isFinite(rect.centerY) ||
+        !Number.isFinite(rect.rotationDeg) ||
+        !Number.isFinite(rect.width) ||
+        rect.width <= 0 ||
+        !Number.isFinite(rect.height) ||
+        rect.height <= 0
+      ) {
+        throw invalid(`layer ${index} (${layer.name}) has invalid cutout geometry`);
+      }
       continue;
     }
     const transform = layer.transform;
@@ -276,6 +288,20 @@ function drawSolidPattern(ctx: CanvasRenderingContext2D, layer: SolidLayer, targ
   }
 }
 
+function eraseCutout(
+  ctx: CanvasRenderingContext2D,
+  layer: Extract<ProjectDocument["layers"][number], { kind: "cutout" }>,
+): void {
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.globalAlpha = 1;
+  ctx.translate(layer.rect.centerX, layer.rect.centerY);
+  ctx.rotate((layer.rect.rotationDeg * Math.PI) / 180);
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(-layer.rect.width / 2, -layer.rect.height / 2, layer.rect.width, layer.rect.height);
+  ctx.restore();
+}
+
 export function composeProject(input: ComposeInput): { canvas: HTMLCanvasElement; tileDraws: number } {
   const doc = input.document;
   const template = getTemplate(doc.garmentType);
@@ -305,6 +331,11 @@ export function composeProject(input: ComposeInput): { canvas: HTMLCanvasElement
       drawSolidPattern(ctx, layer, targets);
     }
     ctx.restore();
+  }
+  for (const layer of doc.layers) {
+    if (layer.kind === "cutout" && layer.visible) {
+      eraseCutout(ctx, layer);
+    }
   }
   return { canvas, tileDraws };
 }

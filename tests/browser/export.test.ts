@@ -107,6 +107,46 @@ test("a completely transparent project warns as fully-transparent", async () => 
   bitmap.close();
 });
 
+test("export preserves a partially transparent cutout in an exact-size RGBA PNG", async () => {
+  const doc = createProject("tshirt");
+  doc.layers = [
+    {
+      id: "fill",
+      name: "fill",
+      kind: "solid",
+      color: "#ff0000",
+      visible: true,
+      opacity: 1,
+      placement: "full-map",
+      transform: transform({ positionX: 256, positionY: 256, scaleX: 512, scaleY: 512 }),
+    },
+    {
+      id: "hole",
+      name: "Cut Out 1",
+      kind: "cutout",
+      visible: true,
+      rect: { centerX: 256, centerY: 256, width: 100, height: 80, rotationDeg: 0 },
+    },
+  ];
+  const result = await exportRobloxPng(doc, new AssetStore());
+  expect(result.warning).toBeNull();
+  expect(result.blob.type).toBe("image/png");
+  const bitmap = await createImageBitmap(result.blob);
+  try {
+    expect(bitmap.width).toBe(512);
+    expect(bitmap.height).toBe(512);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = ctx2d(canvas);
+    ctx.drawImage(bitmap, 0, 0);
+    expect(ctx.getImageData(256, 256, 1, 1).data[3]).toBe(0);
+    expect(ctx.getImageData(10, 10, 1, 1).data[3]).toBe(255);
+  } finally {
+    bitmap.close();
+  }
+});
+
 test("copy constants are nonempty and exact", () => {
   expect(EXPORT_DISCLAIMER.length).toBeGreaterThan(0);
   expect(TRANSPARENT_WARNING.length).toBeGreaterThan(0);
