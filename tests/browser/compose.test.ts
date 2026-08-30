@@ -419,6 +419,18 @@ test("overlapping rotated cutouts erase their union", () => {
   expectPixel(ctx, 20, 20, [0, 0, 255, 255]);
 });
 
+test("an arbitrary-angle cutout erases only points inside its rotated rectangle", () => {
+  const defaults = defaultTransform("full-map", { width: 1, height: 1 }, getTemplate("tshirt"));
+  const doc = projectDoc("tshirt", [
+    solidLayer("base", "#ff0000", "full-map", transform(defaults)),
+    cutoutLayer("diagonal", 256, 256, 100, 40, 45),
+  ]);
+  const ctx = ctx2d(composeProject({ document: doc, assets: new AssetStore() }).canvas);
+  expectTransparent(ctx, 256, 256);
+  expectTransparent(ctx, 277, 277);
+  expectPixel(ctx, 296, 256, [255, 0, 0, 255]);
+});
+
 test("a 4px tile pattern exceeds the per-layer budget and fails with the exact message", async () => {
   const source = columnTileCanvas(4, "#ff00ff", "#00ffff");
   const store = await assetFrom(source, "tiny");

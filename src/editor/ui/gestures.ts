@@ -556,6 +556,11 @@ export function createGestureController(options: GestureControllerOptions): { de
   const onPointerMove = (event: PointerEvent): void => {
     if (cutoutDraw !== null) {
       if (cutoutDraw.pointerId !== event.pointerId) return;
+      if (!options.drawingCutout?.()) {
+        cutoutDraw = null;
+        options.onCutoutDraft?.(null);
+        return;
+      }
       cutoutDraw.current = screenToCanvas(event.clientX, event.clientY);
       const tap = Math.hypot(event.clientX - cutoutDraw.downX, event.clientY - cutoutDraw.downY) < TAP_MAX_DISTANCE;
       options.onCutoutDraft?.(cutoutRect(cutoutDraw.start, cutoutDraw.current, tap));
@@ -577,6 +582,11 @@ export function createGestureController(options: GestureControllerOptions): { de
   const onPointerUp = (event: PointerEvent): void => {
     if (cutoutDraw !== null) {
       if (cutoutDraw.pointerId !== event.pointerId) return;
+      if (!options.drawingCutout?.()) {
+        cutoutDraw = null;
+        options.onCutoutDraft?.(null);
+        return;
+      }
       const tap = Math.hypot(event.clientX - cutoutDraw.downX, event.clientY - cutoutDraw.downY) < TAP_MAX_DISTANCE;
       const rect = cutoutRect(cutoutDraw.start, screenToCanvas(event.clientX, event.clientY), tap);
       cutoutDraw = null;
@@ -648,6 +658,7 @@ export function createGestureController(options: GestureControllerOptions): { de
   };
 
   const onWheel = (event: WheelEvent): void => {
+    if (options.drawingCutout?.()) return;
     if (itemGesture !== null || viewportActive || pointers.size > 0) return;
     const id = options.selectedId();
     if (id === null) return;
@@ -689,6 +700,7 @@ export function createGestureController(options: GestureControllerOptions): { de
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
+    if (options.drawingCutout?.()) return;
     if (event.repeat) {
       return;
     }

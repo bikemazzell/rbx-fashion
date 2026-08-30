@@ -247,6 +247,43 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   expect(moreField(host, "Tall")).toBeGreaterThan(20);
 }, 10000);
 
+test("Escape during an active cutout drag discards it even after pointer-up", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const start = canvasToScreen(host, 100, 100);
+  const end = canvasToScreen(host, 300, 300);
+  pointer(host, "pointerdown", 1, start.x, start.y);
+  pointer(host, "pointermove", 1, end.x, end.y);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "escape cancels draw mode");
+  pointer(host, "pointerup", 1, end.x, end.y);
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  expect(host.querySelector(".cutout-selection-label")).toBeNull();
+  expect(undoDisabled(host)).toBe(true);
+}, 10000);
+
+test("wheel and keyboard transforms are ignored while drawing a cutout", async () => {
+  const host = mountApp();
+  await startEditing(host, "T-Shirt");
+  await importSticker(host);
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  const center = canvasToScreen(host, 256, 256);
+  overlayEl(host).dispatchEvent(new WheelEvent("wheel", { deltaY: -100, clientX: center.x, clientY: center.y, cancelable: true, bubbles: true }));
+  stageEl(host).dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true, cancelable: true }));
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await openMore(host);
+  expect(moreField(host, "Wide")).toBe(100);
+  expect(moreField(host, "Tall")).toBe(100);
+}, 10000);
+
 test("move drag on the selected item is one undo step and restores on undo", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");

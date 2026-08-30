@@ -269,6 +269,8 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
   (byLabel(host, "Cut Out") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  expect(getComputedStyle(requireEl(host.querySelector(".cutout-instruction"), "instruction")).pointerEvents).toBe("none");
+  expect(getComputedStyle(byLabel(host, "Cancel Cut Out")).pointerEvents).toBe("auto");
   const overlay = requireEl(host.querySelector(".workspace-overlay"), "overlay") as HTMLCanvasElement;
   const rect = overlay.getBoundingClientRect();
   const x = rect.left + rect.width / 2;
@@ -292,6 +294,31 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
   expect(itemRows(host)[0]?.querySelector('[aria-label="Move Down"]')).toBeNull();
   const paintUp = itemRows(host)[1]?.querySelector<HTMLButtonElement>('[aria-label="Move Up"]');
   expect(paintUp?.disabled).toBe(true);
+}, 10000);
+
+test("adding paint above an existing cutout selects the new paint, and Preview cancels draw mode", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  toolbarButton(host, "Add").click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  const overlay = requireEl(host.querySelector(".workspace-overlay"), "overlay") as HTMLCanvasElement;
+  const rect = overlay.getBoundingClientRect();
+  overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }));
+  overlay.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }));
+  await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "cutout selected");
+  await addColor(host, 0);
+  await waitFor(() => host.querySelector(".segmented") !== null, "new paint selected");
+  expect(host.querySelector(".cutout-selection-label")).toBeNull();
+
+  toolbarButton(host, "Add").click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "second add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "second draw mode");
+  const view = requireEl(host.querySelector('nav[aria-label="View"]'), "view navigation");
+  (requireEl(view.querySelector('[aria-pressed="false"]'), "preview tab") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "preview tab cancels draw mode");
 }, 10000);
 
 test("adding a color creates one undoable item and Fill Clothing shows active", async () => {

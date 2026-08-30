@@ -297,10 +297,11 @@ button {
   background: color-mix(in srgb, var(--surface, #fff) 94%, transparent);
   box-shadow: 0 2px 10px #0002;
   font-size: 0.9rem;
+  pointer-events: none;
 }
 
 .cutout-instruction span { pointer-events: none; }
-.cutout-instruction button { min-height: 44px; }
+.cutout-instruction button { min-height: 44px; pointer-events: auto; }
 
 .workspace-canvas {
   background-color: #fff;

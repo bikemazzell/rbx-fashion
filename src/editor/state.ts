@@ -539,11 +539,14 @@ function mutate(
       if (current === undefined || current.kind === "cutout") {
         return null;
       }
-      const document = updateLayer(doc, action.id, (layer) => ({
-        ...layer,
-        transform: layer.kind === "cutout" ? solidDefaultTransform() : mergeTransform(layer.transform, action.patch),
-      }));
-      return document === null ? null : accepted(document, counters);
+      const index = layerIndex(doc, action.id);
+      return accepted(
+        replaceLayer(doc, index, {
+          ...current,
+          transform: mergeTransform(current.transform, action.patch),
+        }),
+        counters,
+      );
     }
     case "patch-cutout": {
       if (!isCutoutRectPatchValid(action.patch)) {

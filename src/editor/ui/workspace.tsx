@@ -166,6 +166,10 @@ export function Workspace(props: WorkspaceProps) {
   }, [props.drawingCutout, props.onCancelCutout]);
 
   useEffect(() => {
+    if (!props.drawingCutout) setCutoutDraft(null);
+  }, [props.drawingCutout]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null) {
       return;
@@ -356,7 +360,7 @@ export function Workspace(props: WorkspaceProps) {
     <div class="workspace-stage" ref={stageRef} tabIndex={0}>
       {props.drawingCutout && (
         <div class="cutout-instruction" role="status">
-          <span>Drag where clothing should be see-through.</span>
+          <span>Drag over the part you want see-through.</span>
           <button type="button" aria-label="Cancel Cut Out" onClick={props.onCancelCutout}>Cancel</button>
         </div>
       )}

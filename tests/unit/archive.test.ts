@@ -416,22 +416,22 @@ test("open rejects bad json, wrong format, wrong schema version, bad garment, an
   const badJson = zipSync({ "project.json": new TextEncoder().encode("not json at all") });
   expectInvalid(await openProject(fileOf(badJson)));
 
-  const { document, assetBytes } = await validProject();
+  const document = createProject("tshirt", "Probe");
   const mutants: [string, unknown][] = [
     ["format", "rbx-fashion-projectX"],
-    ["schemaVersion", 2],
+    ["schemaVersion", 3],
     ["garmentType", "hat"],
   ];
   for (const [key, value] of mutants) {
     const mutated = retype({ ...document, [key]: value });
-    expectInvalid(await openProject(fileOf(projectZip(mutated, assetBytes))));
+    expectInvalid(await openProject(fileOf(projectZip(mutated, new Uint8Array()))));
   }
 
   const nineLayers = retype({
     ...document,
     layers: Array.from({ length: 9 }, (_, index) => solidLayer(`layer-${index}`)),
   });
-  expectInvalid(await openProject(fileOf(projectZip(nineLayers, assetBytes))));
+  expectInvalid(await openProject(fileOf(projectZip(nineLayers, new Uint8Array()))));
 });
 
 test("open rejects layers referencing unknown asset ids", async () => {

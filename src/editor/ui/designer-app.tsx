@@ -81,6 +81,11 @@ function topLayerId(session: EditorSession): string | null {
   return top?.id ?? null;
 }
 
+function addedLayerId(before: EditorSession, after: EditorSession): string | null {
+  const previousIds = new Set(before.document.layers.map((layer) => layer.id));
+  return after.document.layers.find((layer) => !previousIds.has(layer.id))?.id ?? null;
+}
+
 function useMediaQuery(queryText: string): boolean {
   const [matches, setMatches] = useState(() => window.matchMedia(queryText).matches);
   useEffect(() => {
@@ -318,7 +323,7 @@ export function DesignerApp() {
     }
     const next = dispatch(current, { type: "add-item", item: { kind: "solid", color } });
     if (commitIfChanged(current, next)) {
-      setSelectedItemId(topLayerId(next));
+      setSelectedItemId(addedLayerId(current, next));
     }
   };
 
@@ -367,7 +372,7 @@ export function DesignerApp() {
         document: { ...added.document, assets: [...added.document.assets, outcome.asset] },
       };
       if (commitIfChanged(captured, next)) {
-        setSelectedItemId(topLayerId(next));
+        setSelectedItemId(addedLayerId(captured, next));
         setImportedMegapixels((value) => value + outcome.megapixels);
       }
       return;
@@ -614,7 +619,7 @@ export function DesignerApp() {
     }
     const next = dispatch(current, { type: "duplicate-item", id });
     if (commitIfChanged(current, next)) {
-      setSelectedItemId(topLayerId(next));
+      setSelectedItemId(addedLayerId(current, next));
     }
   };
 
@@ -688,7 +693,7 @@ export function DesignerApp() {
       document: { ...added.document, assets: [...added.document.assets, entry] },
     };
     if (commitIfChanged(captured, next)) {
-      setSelectedItemId(topLayerId(next));
+      setSelectedItemId(addedLayerId(captured, next));
       setImportedMegapixels((value) => value + megapixels);
     }
     setSheet(null);
@@ -815,7 +820,10 @@ export function DesignerApp() {
         onOpen={requestOpen}
         onUndo={() => apply({ type: "undo" })}
         onRedo={() => apply({ type: "redo" })}
-        onTabChange={setActiveTab}
+        onTabChange={(tab) => {
+          setDrawingCutout(false);
+          setActiveTab(tab);
+        }}
         onToolbar={onToolbar}
         onPlacement={onPlacement}
         onComposeError={handleComposeError}
