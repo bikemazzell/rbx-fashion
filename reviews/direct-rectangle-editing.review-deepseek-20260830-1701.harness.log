@@ -1,0 +1,12 @@
+[0m
+> reviewer · deepseek-v4-pro
+[0m
+[0m→ [0mRead src/editor/ui/gestures.ts
+[0m→ [0mRead tests/browser/gestures.test.ts[90m [offset=1000, limit=220][0m
+[0m→ [0mRead src/editor/state.ts
+[0m→ [0mRead src/editor/ui/sheets.tsx
+[0m→ [0mRead src/editor/ui/designer-app.tsx
+[0m→ [0mRead src/editor/ui/workspace.tsx
+[0m✱ [0mGrep "field-group"[90m 4 matches[0m
+[0m✱ [0mGrep "set-placement|placement:"[90m in src · 24 matches[0m
+[0m→ [0mRead src/editor/ui/editor-screen.tsx[90m [offset=150, limit=70][0m

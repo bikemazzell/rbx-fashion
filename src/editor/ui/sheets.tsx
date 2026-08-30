@@ -370,7 +370,7 @@ function fieldValue(layer: Layer, key: FieldKey): string {
       case "turn":
         return String(Math.round(layer.rect.rotationDeg));
       case "size":
-        return String(Math.round((layer.rect.width + layer.rect.height) / 2));
+        return String(Math.max(1, Math.round((layer.rect.width + layer.rect.height) / 2)));
       case "wide":
         return String(Math.round(layer.rect.width));
       case "tall":
@@ -395,7 +395,7 @@ function fieldValue(layer: Layer, key: FieldKey): string {
       return String(Math.round(transform.rotationDeg));
     case "size":
       return isDecalSolid(layer)
-        ? String(Math.round((transform.scaleX + transform.scaleY) / 2))
+        ? String(Math.max(1, Math.round((transform.scaleX + transform.scaleY) / 2)))
         : String(Math.round(((transform.scaleX + transform.scaleY) / 2) * 100));
     case "wide":
       return String(Math.round(transform.scaleX * 100));

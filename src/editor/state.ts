@@ -522,7 +522,7 @@ function mutate(
     }
     case "set-placement": {
       const current = doc.layers.find((layer) => layer.id === action.id);
-      if (current === undefined || current.kind === "cutout") {
+      if (current === undefined || current.kind !== "raster") {
         return null;
       }
       const document = updateLayer(doc, action.id, (layer) => ({
@@ -536,7 +536,11 @@ function mutate(
         return null;
       }
       const current = doc.layers.find((layer) => layer.id === action.id);
-      if (current === undefined || current.kind === "cutout") {
+      if (
+        current === undefined ||
+        current.kind === "cutout" ||
+        (current.kind === "solid" && current.placement !== "decal")
+      ) {
         return null;
       }
       const index = layerIndex(doc, action.id);

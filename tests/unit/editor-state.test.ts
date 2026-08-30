@@ -686,7 +686,7 @@ test("update-gesture applies the same validation as committed actions", () => {
   }
 });
 
-test("update-gesture supports color and placement mutations on solid layers", () => {
+test("update-gesture supports color mutations on solid layers", () => {
   const ids = makeIds();
   let gestured = dispatch(add(createSession("shirt"), solidSpec, ids), { type: "begin-gesture" }, ids);
   gestured = dispatch(
@@ -694,15 +694,31 @@ test("update-gesture supports color and placement mutations on solid layers", ()
     { type: "update-gesture", mutation: { op: "set-color", id: "layer-1", color: "#0000ff" } },
     ids,
   );
-  gestured = dispatch(
-    gestured,
-    { type: "update-gesture", mutation: { op: "set-placement", id: "layer-1", placement: "decal" } },
-    ids,
-  );
   expect(layerAt(gestured, 0).color).toBe("#0000ff");
-  expect(layerAt(gestured, 0).placement).toBe("decal");
   expect(gestured.undo).toHaveLength(1);
   expect(gestured.dirty).toBe(true);
+});
+
+test("set-placement rejects solids and patch-transform rejects pattern solids", () => {
+  const ids = makeIds();
+  const session = add(createSession("shirt"), solidSpec, ids);
+  expect(
+    dispatch(session, { type: "set-placement", id: "layer-1", placement: "pattern" }, ids),
+  ).toEqual(session);
+  const patterned: EditorSession = {
+    ...session,
+    document: {
+      ...session.document,
+      layers: session.document.layers.map((layer) =>
+        layer.id === "layer-1" && layer.kind === "solid"
+          ? { ...layer, placement: "pattern" as const }
+          : layer,
+      ),
+    },
+  };
+  expect(
+    dispatch(patterned, { type: "patch-transform", id: "layer-1", patch: { positionX: 10 } }, ids),
+  ).toEqual(patterned);
 });
 
 test("gesture commit clears redo", () => {
