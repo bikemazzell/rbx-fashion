@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { createProject } from "../../src/domain/project";
-import type { Layer } from "../../src/domain/types";
+import type { PaintLayer } from "../../src/domain/types";
 import { createSession, dispatch } from "../../src/editor/state";
 import type {
   EditorSession,
@@ -46,10 +46,10 @@ function addPictures(s: EditorSession, ids: () => string, count: number): Editor
   return next;
 }
 
-function layerAt(s: EditorSession, index: number): Layer {
+function layerAt(s: EditorSession, index: number): PaintLayer {
   const layer = s.document.layers[index];
-  if (layer === undefined) {
-    throw new Error(`no layer at index ${index}`);
+  if (layer === undefined || layer.kind === "cutout") {
+    throw new Error(`no paint layer at index ${index}`);
   }
   return layer;
 }

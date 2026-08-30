@@ -1,7 +1,7 @@
 import type { AssetStore } from "../assets/store";
 import { composeProject } from "../compositor/compose";
 import { getTemplate } from "../domain/registry";
-import type { ProjectDocumentV1 } from "../domain/types";
+import type { ProjectDocument } from "../domain/types";
 
 export const EXPORT_DISCLAIMER =
   "Roblox moderation and avatar compatibility aren't controlled by this app—test your image in Roblox Studio before uploading.";
@@ -51,7 +51,7 @@ function scanAlpha(bitmap: ImageBitmap): { nonempty: boolean; alphaInRange: bool
 }
 
 export async function exportRobloxPng(
-  document: ProjectDocumentV1,
+  document: ProjectDocument,
   assets: AssetStore,
 ): Promise<ExportResult> {
   const { canvas } = composeProject({ document, assets });

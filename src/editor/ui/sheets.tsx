@@ -352,6 +352,30 @@ function roundCrop(value: number): string {
 }
 
 function fieldValue(layer: Layer, key: FieldKey): string {
+  if (layer.kind === "cutout") {
+    switch (key) {
+      case "left":
+        return String(Math.round(layer.rect.centerX));
+      case "up":
+        return String(Math.round(layer.rect.centerY));
+      case "turn":
+        return String(Math.round(layer.rect.rotationDeg));
+      case "size":
+        return String(Math.round((layer.rect.width + layer.rect.height) / 2));
+      case "wide":
+        return String(Math.round(layer.rect.width));
+      case "tall":
+        return String(Math.round(layer.rect.height));
+      case "see":
+        return "0";
+      case "cropLeft":
+      case "cropTop":
+        return "0";
+      case "cropWide":
+      case "cropTall":
+        return "1";
+    }
+  }
   const transform = layer.transform;
   switch (key) {
     case "left":
@@ -387,6 +411,9 @@ export interface MoreSheetProps {
 }
 
 function commitField(props: MoreSheetProps, key: FieldKey, value: number): void {
+  if (props.layer.kind === "cutout") {
+    return;
+  }
   const transform = props.layer.transform;
   switch (key) {
     case "left":

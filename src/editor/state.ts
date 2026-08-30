@@ -1,9 +1,12 @@
 import { createProject } from "../domain/project";
 import { LIMITS } from "../domain/types";
 import type {
+  AssetManifestEntry,
   GarmentType,
   Layer,
+  PaintLayer,
   PlacementMode,
+  ProjectDocument,
   ProjectDocumentV1,
   Transform,
 } from "../domain/types";
@@ -49,10 +52,10 @@ export interface LayerCounters {
 }
 
 export interface EditorSession {
-  document: ProjectDocumentV1;
-  undo: ProjectDocumentV1[];
-  redo: ProjectDocumentV1[];
-  pending: ProjectDocumentV1 | null;
+  document: ProjectDocument;
+  undo: ProjectDocument[];
+  redo: ProjectDocument[];
+  pending: ProjectDocument | null;
   dirty: boolean;
   counters: LayerCounters;
 }
@@ -77,7 +80,7 @@ type MutatingAction = Extract<
 >;
 
 interface MutationResult {
-  document: ProjectDocumentV1;
+  document: ProjectDocument;
   counters: LayerCounters;
 }
 
@@ -115,6 +118,10 @@ function isName(value: unknown): boolean {
   return typeof value === "string" && value.trim().length >= 1 && value.trim().length <= 40;
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((key) => allowed.has(key));
+}
+
 function isValidTransformShape(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.crop)) {
     return false;
@@ -135,7 +142,7 @@ function isValidTransformShape(value: unknown): boolean {
   );
 }
 
-function isValidLayerShape(value: unknown): boolean {
+function isValidPaintLayerShape(value: unknown): value is PaintLayer {
   if (!isRecord(value)) {
     return false;
   }
@@ -160,6 +167,40 @@ function isValidLayerShape(value: unknown): boolean {
     return typeof value.assetId === "string" && value.assetId.length > 0;
   }
   return typeof value.color === "string" && value.color.length > 0;
+}
+
+const CUTOUT_KEYS: ReadonlySet<string> = new Set(["id", "name", "kind", "visible", "rect"]);
+const CUTOUT_RECT_KEYS: ReadonlySet<string> = new Set([
+  "centerX",
+  "centerY",
+  "width",
+  "height",
+  "rotationDeg",
+]);
+
+function isValidCutoutLayerShape(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, CUTOUT_KEYS) ||
+    !isRecord(value.rect) ||
+    !hasOnlyKeys(value.rect, CUTOUT_RECT_KEYS)
+  ) {
+    return false;
+  }
+  return (
+    typeof value.id === "string" &&
+    value.id.length > 0 &&
+    isName(value.name) &&
+    value.kind === "cutout" &&
+    typeof value.visible === "boolean" &&
+    isFiniteNumber(value.rect.centerX) &&
+    isFiniteNumber(value.rect.centerY) &&
+    isFiniteNumber(value.rect.width) &&
+    value.rect.width > 0 &&
+    isFiniteNumber(value.rect.height) &&
+    value.rect.height > 0 &&
+    isFiniteNumber(value.rect.rotationDeg)
+  );
 }
 
 function isValidManifestEntryShape(value: unknown): boolean {
@@ -194,23 +235,18 @@ function isValidManifestEntryShape(value: unknown): boolean {
   return value.prompt === undefined || typeof value.prompt === "string";
 }
 
-export function isValidProjectDocument(value: unknown): boolean {
-  if (!isRecord(value) || !isName(value.name)) {
+function hasValidDocumentHeader(value: Record<string, unknown>, schemaVersion: 1 | 2): boolean {
+  return (
+    value.format === "rbx-fashion-project" &&
+    value.schemaVersion === schemaVersion &&
+    isName(value.name) &&
+    (value.garmentType === "tshirt" || value.garmentType === "shirt" || value.garmentType === "pants")
+  );
+}
+
+function hasValidAssets(value: Record<string, unknown>): boolean {
+  if (!Array.isArray(value.assets)) {
     return false;
-  }
-  if (!Array.isArray(value.layers) || !Array.isArray(value.assets)) {
-    return false;
-  }
-  const layerIds = new Set<string>();
-  for (const layer of value.layers) {
-    if (!isValidLayerShape(layer) || !isRecord(layer)) {
-      return false;
-    }
-    const id = layer.id as string;
-    if (layerIds.has(id)) {
-      return false;
-    }
-    layerIds.add(id);
   }
   const assetIds = new Set<string>();
   for (const entry of value.assets) {
@@ -226,7 +262,74 @@ export function isValidProjectDocument(value: unknown): boolean {
   return true;
 }
 
-export function createSessionFromDocument(document: ProjectDocumentV1): EditorSession | null {
+export function isValidProjectDocumentV1(value: unknown): value is ProjectDocumentV1 {
+  if (!isRecord(value) || !hasValidDocumentHeader(value, 1)) {
+    return false;
+  }
+  if (!Array.isArray(value.layers) || value.layers.length > LIMITS.MAX_LAYERS || !hasValidAssets(value)) {
+    return false;
+  }
+  const layerIds = new Set<string>();
+  for (const layer of value.layers) {
+    if (!isValidPaintLayerShape(layer) || !isRecord(layer)) {
+      return false;
+    }
+    const id = layer.id as string;
+    if (layerIds.has(id)) {
+      return false;
+    }
+    layerIds.add(id);
+  }
+  const assetIds = new Set(
+    (value.assets as unknown[]).map((entry) => (entry as AssetManifestEntry).id),
+  );
+  return value.layers.every(
+    (layer) => !isRecord(layer) || layer.kind !== "raster" || assetIds.has(layer.assetId as string),
+  );
+}
+
+export function migrateProjectDocumentV1(document: ProjectDocumentV1): ProjectDocument {
+  return { ...document, schemaVersion: 2, layers: document.layers.slice(), assets: document.assets.slice() };
+}
+
+export function isValidProjectDocument(value: unknown): value is ProjectDocument {
+  if (!isRecord(value) || !hasValidDocumentHeader(value, 2)) {
+    return false;
+  }
+  if (!Array.isArray(value.layers) || value.layers.length > LIMITS.MAX_LAYERS || !hasValidAssets(value)) {
+    return false;
+  }
+  const layerIds = new Set<string>();
+  const assetIds = new Set(
+    (value.assets as unknown[]).map((entry) => (entry as AssetManifestEntry).id),
+  );
+  let sawCutout = false;
+  for (const layer of value.layers) {
+    if (!isRecord(layer)) {
+      return false;
+    }
+    const valid = layer.kind === "cutout" ? isValidCutoutLayerShape(layer) : isValidPaintLayerShape(layer);
+    if (!valid) {
+      return false;
+    }
+    if (layer.kind === "raster" && !assetIds.has(layer.assetId as string)) {
+      return false;
+    }
+    if (layer.kind === "cutout") {
+      sawCutout = true;
+    } else if (sawCutout) {
+      return false;
+    }
+    const id = layer.id as string;
+    if (layerIds.has(id)) {
+      return false;
+    }
+    layerIds.add(id);
+  }
+  return true;
+}
+
+export function createSessionFromDocument(document: ProjectDocument): EditorSession | null {
   if (!isValidProjectDocument(document)) {
     return null;
   }
@@ -234,7 +337,7 @@ export function createSessionFromDocument(document: ProjectDocumentV1): EditorSe
   for (const layer of document.layers) {
     if (layer.kind === "raster") {
       counters.raster += 1;
-    } else {
+    } else if (layer.kind === "solid") {
       counters.solid += 1;
     }
   }
@@ -406,6 +509,10 @@ function mutate(
       );
     }
     case "set-placement": {
+      const current = doc.layers.find((layer) => layer.id === action.id);
+      if (current === undefined || current.kind === "cutout") {
+        return null;
+      }
       const document = updateLayer(doc, action.id, (layer) => ({
         ...layer,
         placement: action.placement,
@@ -416,14 +523,22 @@ function mutate(
       if (!isTransformPatchValid(action.patch)) {
         return null;
       }
+      const current = doc.layers.find((layer) => layer.id === action.id);
+      if (current === undefined || current.kind === "cutout") {
+        return null;
+      }
       const document = updateLayer(doc, action.id, (layer) => ({
         ...layer,
-        transform: mergeTransform(layer.transform, action.patch),
+        transform: layer.kind === "cutout" ? solidDefaultTransform() : mergeTransform(layer.transform, action.patch),
       }));
       return document === null ? null : accepted(document, counters);
     }
     case "set-opacity": {
       if (!isOpacityValid(action.opacity)) {
+        return null;
+      }
+      const current = doc.layers.find((layer) => layer.id === action.id);
+      if (current === undefined || current.kind === "cutout") {
         return null;
       }
       const document = updateLayer(doc, action.id, (layer) => ({
@@ -444,7 +559,7 @@ function mutate(
 }
 
 function addItem(
-  doc: ProjectDocumentV1,
+  doc: ProjectDocument,
   counters: LayerCounters,
   item: ItemSpec,
   idFactory: IdFactory,
@@ -484,7 +599,7 @@ function addItem(
 }
 
 function duplicateItem(
-  doc: ProjectDocumentV1,
+  doc: ProjectDocument,
   counters: LayerCounters,
   id: string,
   idFactory: IdFactory,
@@ -497,12 +612,15 @@ function duplicateItem(
   if (source === undefined) {
     return null;
   }
+  if (source.kind === "cutout") {
+    return null;
+  }
   const next: LayerCounters =
     source.kind === "solid"
       ? { ...counters, solid: counters.solid + 1 }
       : { ...counters, raster: counters.raster + 1 };
   const name = source.kind === "solid" ? `Color ${next.solid}` : `Picture ${next.raster}`;
-  const copy: Layer = {
+  const copy: PaintLayer = {
     ...source,
     id: idFactory(),
     name,
@@ -512,7 +630,7 @@ function duplicateItem(
 }
 
 function reorderLayer(
-  doc: ProjectDocumentV1,
+  doc: ProjectDocument,
   counters: LayerCounters,
   id: string,
   toIndex: number,
@@ -534,33 +652,33 @@ function reorderLayer(
   return accepted({ ...doc, layers }, counters);
 }
 
-function accepted(document: ProjectDocumentV1, counters: LayerCounters): MutationResult {
+function accepted(document: ProjectDocument, counters: LayerCounters): MutationResult {
   return { document, counters };
 }
 
 function pushHistory(
-  stack: ProjectDocumentV1[],
-  snapshot: ProjectDocumentV1,
-): ProjectDocumentV1[] {
+  stack: ProjectDocument[],
+  snapshot: ProjectDocument,
+): ProjectDocument[] {
   const next = [...stack, snapshot];
   return next.length > LIMITS.MAX_HISTORY ? next.slice(next.length - LIMITS.MAX_HISTORY) : next;
 }
 
-function layerIndex(doc: ProjectDocumentV1, id: string): number {
+function layerIndex(doc: ProjectDocument, id: string): number {
   return doc.layers.findIndex((layer) => layer.id === id);
 }
 
-function replaceLayer(doc: ProjectDocumentV1, index: number, layer: Layer): ProjectDocumentV1 {
+function replaceLayer(doc: ProjectDocument, index: number, layer: Layer): ProjectDocument {
   const layers = doc.layers.slice();
   layers[index] = layer;
   return { ...doc, layers };
 }
 
 function updateLayer(
-  doc: ProjectDocumentV1,
+  doc: ProjectDocument,
   id: string,
   update: (layer: Layer) => Layer,
-): ProjectDocumentV1 | null {
+): ProjectDocument | null {
   const index = layerIndex(doc, id);
   const layer = index < 0 ? undefined : doc.layers[index];
   if (layer === undefined) {

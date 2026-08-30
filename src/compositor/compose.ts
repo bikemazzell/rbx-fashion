@@ -1,7 +1,7 @@
 import type { AssetStore, NormalizedPngAsset } from "../assets/store";
 import { getTemplate } from "../domain/registry";
 import { LIMITS } from "../domain/types";
-import type { Layer, ProjectDocumentV1, Rect } from "../domain/types";
+import type { PaintLayer, ProjectDocument, RasterLayer, Rect, SolidLayer } from "../domain/types";
 import {
   countPatternTileDraws,
   cropToPixels,
@@ -14,7 +14,7 @@ import {
 export const PATTERN_TOO_SMALL_MESSAGE = "Pattern is too small—make it larger";
 
 export interface ComposeInput {
-  document: ProjectDocumentV1;
+  document: ProjectDocument;
   assets: AssetStore;
 }
 
@@ -50,11 +50,14 @@ function patternTooSmall(): ComposeFailure {
   return { kind: "pattern-too-small", message: PATTERN_TOO_SMALL_MESSAGE };
 }
 
-function validateDocument(doc: ProjectDocumentV1, assets: AssetStore): void {
+function validateDocument(doc: ProjectDocument, assets: AssetStore): void {
   if (doc.layers.length > LIMITS.MAX_LAYERS) {
     throw invalid(`too many layers: ${doc.layers.length} > ${LIMITS.MAX_LAYERS}`);
   }
   for (const [index, layer] of doc.layers.entries()) {
+    if (layer.kind === "cutout") {
+      continue;
+    }
     const transform = layer.transform;
     if (
       !Number.isFinite(transform.scaleX) ||
@@ -80,22 +83,19 @@ function validateDocument(doc: ProjectDocumentV1, assets: AssetStore): void {
   }
 }
 
-function rasterAsset(layer: Layer, assets: AssetStore): NormalizedPngAsset {
-  const asset = layer.assetId === undefined ? undefined : assets.get(layer.assetId);
+function rasterAsset(layer: RasterLayer, assets: AssetStore): NormalizedPngAsset {
+  const asset = assets.get(layer.assetId);
   if (asset === undefined) {
     throw invalid(`layer (${layer.name}) references a missing asset`);
   }
   return asset;
 }
 
-function solidColor(layer: Layer): string {
-  if (layer.color === undefined) {
-    throw invalid(`layer (${layer.name}) is missing a color`);
-  }
+function solidColor(layer: SolidLayer): string {
   return layer.color;
 }
 
-function buildGrid(layer: Layer, asset: NormalizedPngAsset): TileGrid {
+function buildGrid(layer: RasterLayer, asset: NormalizedPngAsset): TileGrid {
   const source = cropToPixels(layer.transform.crop, asset.width, asset.height);
   return {
     cw: source.cw,
@@ -108,11 +108,11 @@ function buildGrid(layer: Layer, asset: NormalizedPngAsset): TileGrid {
   };
 }
 
-function checkTileBudget(doc: ProjectDocumentV1, assets: AssetStore, targets: readonly PanelTarget[]): void {
+function checkTileBudget(doc: ProjectDocument, assets: AssetStore, targets: readonly PanelTarget[]): void {
   const garmentRects = targets.map((target) => target.garmentRect);
   let total = 0;
   for (const layer of doc.layers) {
-    if (!layer.visible || layer.placement !== "pattern" || layer.kind !== "raster") {
+    if (layer.kind !== "raster" || !layer.visible || layer.placement !== "pattern") {
       continue;
     }
     const grid = buildGrid(layer, rasterAsset(layer, assets));
@@ -171,7 +171,7 @@ function drawCroppedCentered(
   ctx.restore();
 }
 
-function fillSolidCentered(ctx: CanvasRenderingContext2D, layer: Layer): void {
+function fillSolidCentered(ctx: CanvasRenderingContext2D, layer: SolidLayer): void {
   ctx.save();
   ctx.fillStyle = solidColor(layer);
   ctx.translate(layer.transform.positionX, layer.transform.positionY);
@@ -183,7 +183,7 @@ function fillSolidCentered(ctx: CanvasRenderingContext2D, layer: Layer): void {
 
 function drawDecal(
   ctx: CanvasRenderingContext2D,
-  layer: Layer,
+  layer: PaintLayer,
   targets: readonly PanelTarget[],
   assets: AssetStore,
 ): void {
@@ -208,7 +208,7 @@ function drawDecal(
   ctx.restore();
 }
 
-function drawFullMap(ctx: CanvasRenderingContext2D, layer: Layer, assets: AssetStore): void {
+function drawFullMap(ctx: CanvasRenderingContext2D, layer: PaintLayer, assets: AssetStore): void {
   if (layer.kind === "raster") {
     const asset = rasterAsset(layer, assets);
     const source = cropToPixels(layer.transform.crop, asset.width, asset.height);
@@ -229,7 +229,7 @@ function drawFullMap(ctx: CanvasRenderingContext2D, layer: Layer, assets: AssetS
 
 function drawRasterPattern(
   ctx: CanvasRenderingContext2D,
-  layer: Layer,
+  layer: RasterLayer,
   asset: NormalizedPngAsset,
   targets: readonly PanelTarget[],
 ): number {
@@ -264,7 +264,7 @@ function drawRasterPattern(
   return draws;
 }
 
-function drawSolidPattern(ctx: CanvasRenderingContext2D, layer: Layer, targets: readonly PanelTarget[]): void {
+function drawSolidPattern(ctx: CanvasRenderingContext2D, layer: SolidLayer, targets: readonly PanelTarget[]): void {
   ctx.fillStyle = solidColor(layer);
   for (const target of targets) {
     ctx.save();
@@ -290,7 +290,7 @@ export function composeProject(input: ComposeInput): { canvas: HTMLCanvasElement
 
   let tileDraws = 0;
   for (const layer of doc.layers) {
-    if (!layer.visible) {
+    if (!layer.visible || layer.kind === "cutout") {
       continue;
     }
     ctx.save();

@@ -6,7 +6,7 @@ import { LIMITS } from "../../src/domain/types";
 import type {
   AssetManifestEntry,
   Layer,
-  ProjectDocumentV1,
+  ProjectDocument,
   Transform,
 } from "../../src/domain/types";
 import { isValidProjectDocument } from "../../src/editor/state";
@@ -91,7 +91,7 @@ function identityTransform(): Transform {
 }
 
 async function validProject(): Promise<{
-  document: ProjectDocumentV1;
+  document: ProjectDocument;
   assetBytes: Uint8Array<ArrayBuffer>;
 }> {
   const assetBytes = fakePng(32, 16);
@@ -102,7 +102,7 @@ async function validProject(): Promise<{
 }
 
 function projectZip(
-  document: ProjectDocumentV1,
+  document: ProjectDocument,
   assetBytes: Uint8Array,
   extra: Record<string, Uint8Array> = {},
   omit: readonly string[] = [],
@@ -120,12 +120,18 @@ function projectZip(
   return zipSync(entries);
 }
 
-function retype(value: unknown): ProjectDocumentV1 {
-  return value as ProjectDocumentV1;
+function retype(value: unknown): ProjectDocument {
+  return value as ProjectDocument;
 }
 
 function fileOf(bytes: Uint8Array<ArrayBuffer>, name = "project.rbxcloth.zip"): File {
   return new File([bytes], name, { type: "application/zip" });
+}
+
+function assetFreeZip(document: unknown): Uint8Array<ArrayBuffer> {
+  return zipSync({
+    "project.json": new TextEncoder().encode(JSON.stringify(document)),
+  });
 }
 
 function concat(parts: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
@@ -176,6 +182,101 @@ test("zip limit defaults are the real LIMITS constants", () => {
   expect(ZIP_LIMIT_DEFAULTS.compressed).toBe(LIMITS.ZIP_MAX_COMPRESSED);
   expect(ZIP_LIMIT_DEFAULTS.expanded).toBe(LIMITS.ZIP_MAX_EXPANDED);
   expect(ZIP_LIMIT_DEFAULTS.entries).toBe(LIMITS.ZIP_MAX_ENTRIES);
+});
+
+test("open migrates an asset-free v1 project to the current v2 schema", async () => {
+  const legacy = {
+    format: "rbx-fashion-project",
+    schemaVersion: 1,
+    name: "Legacy Shirt",
+    garmentType: "shirt",
+    layers: [solidLayer("legacy-color")],
+    assets: [],
+  };
+
+  const result = await openProject(fileOf(assetFreeZip(legacy)));
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.document).toEqual({ ...legacy, schemaVersion: 2 });
+    expect(result.assets).toEqual([]);
+  }
+});
+
+test("an asset-free v2 project saves and reopens deterministically", async () => {
+  const document = {
+    format: "rbx-fashion-project" as const,
+    schemaVersion: 2 as const,
+    name: "Cutout Ready",
+    garmentType: "pants" as const,
+    layers: [],
+    assets: [],
+  };
+
+  const first = await saveProject(document, () => {
+    throw new Error("asset callback must not run");
+  });
+  const second = await saveProject(document, () => {
+    throw new Error("asset callback must not run");
+  });
+  expect(first.ok).toBe(true);
+  expect(second.ok).toBe(true);
+  if (first.ok && second.ok) {
+    expect(new Uint8Array(await first.blob.arrayBuffer())).toEqual(
+      new Uint8Array(await second.blob.arrayBuffer()),
+    );
+    const reopened = await openProject(fileOf(new Uint8Array(await first.blob.arrayBuffer())));
+    expect(reopened.ok).toBe(true);
+    if (reopened.ok) {
+      expect(reopened.document).toEqual(document);
+    }
+  }
+});
+
+test("open rejects unknown schemas and strict cutout hybrids", async () => {
+  const base = {
+    format: "rbx-fashion-project",
+    schemaVersion: 2,
+    name: "Strict",
+    garmentType: "shirt",
+    layers: [
+      {
+        id: "cutout-1",
+        name: "Cut Out 1",
+        kind: "cutout",
+        visible: true,
+        rect: { centerX: 100, centerY: 100, width: 80, height: 60, rotationDeg: 0 },
+      },
+    ],
+    assets: [],
+  };
+
+  expectInvalid(await openProject(fileOf(assetFreeZip({ ...base, schemaVersion: 99 }))));
+  expectInvalid(
+    await openProject(
+      fileOf(assetFreeZip({ ...base, layers: [{ ...base.layers[0], opacity: 1 }] })),
+    ),
+  );
+  expectInvalid(
+    await openProject(
+      fileOf(
+        assetFreeZip({
+          ...base,
+          layers: [
+            {
+              ...base.layers[0],
+              rect: { ...base.layers[0]?.rect, unexpected: true },
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+});
+
+test("v2 validation rejects a raster layer without a matching manifest asset", () => {
+  const document = createProject("shirt", "Missing");
+  document.layers = [rasterLayer("layer-1", "missing")];
+  expect(isValidProjectDocument(document)).toBe(false);
 });
 
 test("message constants are nonempty strings", () => {

@@ -1,4 +1,4 @@
-import type { GarmentType, ProjectDocumentV1 } from "./types";
+import type { GarmentType, ProjectDocument } from "./types";
 
 const DEFAULT_NAMES: Readonly<Record<GarmentType, string>> = {
   tshirt: "My T-shirt",
@@ -6,10 +6,10 @@ const DEFAULT_NAMES: Readonly<Record<GarmentType, string>> = {
   pants: "My Pants",
 };
 
-export function createProject(type: GarmentType, name?: string): ProjectDocumentV1 {
+export function createProject(type: GarmentType, name?: string): ProjectDocument {
   return {
     format: "rbx-fashion-project",
-    schemaVersion: 1,
+    schemaVersion: 2,
     name: name ?? DEFAULT_NAMES[type],
     garmentType: type,
     layers: [],

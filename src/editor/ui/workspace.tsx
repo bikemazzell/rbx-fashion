@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { AssetStore } from "../../assets/store";
 import { composeProject } from "../../compositor/compose";
 import { getTemplate } from "../../domain/registry";
-import type { Layer, ProjectDocumentV1, Rect, TemplateRegistryEntry } from "../../domain/types";
+import type { Layer, ProjectDocument, Rect, TemplateRegistryEntry } from "../../domain/types";
 import type { EditorAction, EditorSession } from "../state";
 import { createGestureController, footprintGeometry } from "./gestures";
 import type { Point, Viewport } from "./gestures";
 import { composeFailureMessage } from "./text";
 
 interface WorkspaceProps {
-  document: ProjectDocumentV1;
+  document: ProjectDocument;
   assets: AssetStore;
   selectedLayer: Layer | null;
   onComposeError: (message: string | null) => void;
@@ -53,6 +53,15 @@ function rotatedBounds(
 }
 
 function selectionRect(layer: Layer, assets: AssetStore, template: TemplateRegistryEntry): Rect {
+  if (layer.kind === "cutout") {
+    return rotatedBounds(
+      layer.rect.centerX,
+      layer.rect.centerY,
+      layer.rect.width,
+      layer.rect.height,
+      layer.rect.rotationDeg,
+    );
+  }
   const transform = layer.transform;
   if (layer.placement === "pattern") {
     return patternBounds(template);

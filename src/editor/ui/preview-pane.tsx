@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { AssetStore } from "../../assets/store";
 import { composeProject, PATTERN_TOO_SMALL_MESSAGE } from "../../compositor/compose";
-import type { GarmentType, ProjectDocumentV1 } from "../../domain/types";
+import type { GarmentType, ProjectDocument } from "../../domain/types";
 import type { PreviewHandle } from "../../preview/preview";
 import { PREVIEW_COMPOSE_FAILED_MESSAGE, PREVIEW_UNAVAILABLE_MESSAGE } from "./text";
 
 interface PreviewPaneProps {
   garment: GarmentType;
-  document: ProjectDocumentV1;
+  document: ProjectDocument;
   assets: AssetStore;
   active: boolean;
 }

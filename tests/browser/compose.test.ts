@@ -5,7 +5,7 @@ import { defaultTransform } from "../../src/compositor/math";
 import { getTemplate } from "../../src/domain/registry";
 import { createProject } from "../../src/domain/project";
 import { exportRobloxPng } from "../../src/project/export";
-import type { GarmentType, Layer, PlacementMode, ProjectDocumentV1, Transform } from "../../src/domain/types";
+import type { GarmentType, Layer, PlacementMode, ProjectDocument, Transform } from "../../src/domain/types";
 
 const MAGENTA: [number, number, number, number] = [255, 0, 255, 255];
 const CYAN: [number, number, number, number] = [0, 255, 255, 255];
@@ -68,7 +68,7 @@ function solidLayer(
   };
 }
 
-function projectDoc(garmentType: GarmentType, layers: Layer[]): ProjectDocumentV1 {
+function projectDoc(garmentType: GarmentType, layers: Layer[]): ProjectDocument {
   const doc = createProject(garmentType);
   doc.layers = layers;
   return doc;

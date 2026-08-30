@@ -11,17 +11,46 @@ export interface Transform {
   crop: { x: number; y: number; width: number; height: number };
 }
 
-export interface Layer {
+interface LayerBase {
   id: string;
   name: string;
-  kind: "solid" | "raster";
+  visible: boolean;
+}
+
+interface PaintLayerBase extends LayerBase {
   assetId?: string;
   color?: string;
-  visible: boolean;
   opacity: number;
   placement: PlacementMode;
   transform: Transform;
 }
+
+export interface RasterLayer extends PaintLayerBase {
+  kind: "raster";
+  assetId: string;
+}
+
+export interface SolidLayer extends PaintLayerBase {
+  kind: "solid";
+  color: string;
+}
+
+export type PaintLayer = RasterLayer | SolidLayer;
+
+export interface CutoutRect {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+  rotationDeg: number;
+}
+
+export interface CutoutLayer extends LayerBase {
+  kind: "cutout";
+  rect: CutoutRect;
+}
+
+export type Layer = PaintLayer | CutoutLayer;
 
 export interface AssetManifestEntry {
   id: string;
@@ -39,6 +68,15 @@ export interface AssetManifestEntry {
 export interface ProjectDocumentV1 {
   format: "rbx-fashion-project";
   schemaVersion: 1;
+  name: string;
+  garmentType: GarmentType;
+  layers: PaintLayer[];
+  assets: AssetManifestEntry[];
+}
+
+export interface ProjectDocument {
+  format: "rbx-fashion-project";
+  schemaVersion: 2;
   name: string;
   garmentType: GarmentType;
   layers: Layer[];

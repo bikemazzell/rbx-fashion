@@ -4,8 +4,12 @@ import { pngAssetFromBytes } from "../assets/store";
 import type { NormalizedPngAsset } from "../assets/store";
 import { sha256Hex } from "../assets/hash";
 import { LIMITS } from "../domain/types";
-import type { ProjectDocumentV1 } from "../domain/types";
-import { isValidProjectDocument } from "../editor/state";
+import type { ProjectDocument, ProjectDocumentV1 } from "../domain/types";
+import {
+  isValidProjectDocument,
+  isValidProjectDocumentV1,
+  migrateProjectDocumentV1,
+} from "../editor/state";
 import {
   OPEN_INVALID_MESSAGE,
   OPEN_TOO_BIG_MESSAGE,
@@ -32,7 +36,7 @@ export type SaveResult =
 export type OpenFailureKind = "too-large" | "invalid";
 
 export type OpenResult =
-  | { ok: true; document: ProjectDocumentV1; assets: NormalizedPngAsset[] }
+  | { ok: true; document: ProjectDocument; assets: NormalizedPngAsset[] }
   | { ok: false; kind: OpenFailureKind; message: string };
 
 const FIXED_MTIME = 315532800000;
@@ -104,7 +108,7 @@ function ihdrDimensions(bytes: Uint8Array): { width: number; height: number } | 
 }
 
 export async function saveProject(
-  document: ProjectDocumentV1,
+  document: ProjectDocument,
   getAssetBytes: (id: string) => Uint8Array,
   overrides: Partial<ZipLimits> = {},
 ): Promise<SaveResult> {
@@ -219,16 +223,21 @@ export async function openProject(
   const record = parsed as Record<string, unknown>;
   if (
     record.format !== "rbx-fashion-project" ||
-    record.schemaVersion !== 1 ||
     typeof record.garmentType !== "string" ||
     !GARMENT_TYPES.has(record.garmentType) ||
     !Array.isArray(record.layers) ||
-    record.layers.length > LIMITS.MAX_LAYERS ||
-    !isValidProjectDocument(parsed)
+    record.layers.length > LIMITS.MAX_LAYERS
   ) {
     return invalidFailure();
   }
-  const document = parsed as ProjectDocumentV1;
+  let document: ProjectDocument;
+  if (record.schemaVersion === 1 && isValidProjectDocumentV1(parsed)) {
+    document = migrateProjectDocumentV1(parsed as ProjectDocumentV1);
+  } else if (record.schemaVersion === 2 && isValidProjectDocument(parsed)) {
+    document = parsed;
+  } else {
+    return invalidFailure();
+  }
 
   const manifestIds = new Set<string>();
   for (const asset of document.assets) {

@@ -206,11 +206,12 @@ export function createGestureController(options: GestureControllerOptions): { de
     const point = screenToCanvas(event.clientX, event.clientY);
     const selectedId = options.selectedId();
     const selectedFootprint = selectedId === null ? null : options.itemFootprint(selectedId);
-    const transform =
+    const selectedLayer =
       selectedId === null
-        ? null
-        : options.getSession().document.layers.find((layer) => layer.id === selectedId)?.transform ??
-          null;
+        ? undefined
+        : options.getSession().document.layers.find((layer) => layer.id === selectedId);
+    const transform =
+      selectedLayer === undefined || selectedLayer.kind === "cutout" ? null : selectedLayer.transform;
     if (selectedId !== null && selectedFootprint !== null && transform !== null) {
       const tolerance = handleRadiusCanvasPx();
       const rotateDistance = Math.hypot(

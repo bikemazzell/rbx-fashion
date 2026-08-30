@@ -1,6 +1,6 @@
 import type { Ref } from "preact";
 import type { AssetStore } from "../../assets/store";
-import type { Layer, PlacementMode, ProjectDocumentV1 } from "../../domain/types";
+import type { Layer, PlacementMode, ProjectDocument } from "../../domain/types";
 import type { EditorAction, EditorSession, TransformPatch } from "../state";
 import {
   IconAdd,
@@ -88,6 +88,9 @@ export interface EditorScreenProps {
 }
 
 function isPlacementActive(layer: Layer, value: PlacementMode): boolean {
+  if (layer.kind === "cutout") {
+    return false;
+  }
   if (layer.kind === "solid") {
     return value === "full-map";
   }
@@ -95,11 +98,11 @@ function isPlacementActive(layer: Layer, value: PlacementMode): boolean {
 }
 
 function placementDisabled(layer: Layer, value: PlacementMode): boolean {
-  return layer.kind === "solid" && value !== "full-map";
+  return layer.kind === "cutout" || (layer.kind === "solid" && value !== "full-map");
 }
 
 export function EditorScreen(props: EditorScreenProps) {
-  const doc: ProjectDocumentV1 = props.session.document;
+  const doc: ProjectDocument = props.session.document;
   const selected = props.selectedLayer;
   const repeatDisabled =
     selected === null || selected.kind !== "raster" || !selected.visible;

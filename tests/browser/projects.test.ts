@@ -10,7 +10,7 @@ import type {
   AssetManifestEntry,
   GarmentType,
   Layer,
-  ProjectDocumentV1,
+  ProjectDocument,
 } from "../../src/domain/types";
 import { createSessionFromDocument } from "../../src/editor/state";
 import { mountDesignerApp, unmountDesignerApp } from "../../src/editor/ui/mount";
@@ -184,7 +184,7 @@ function countOpaque(data: Uint8ClampedArray): number {
 
 async function garmentProject(
   garment: GarmentType,
-): Promise<{ document: ProjectDocumentV1; assets: AssetStore }> {
+): Promise<{ document: ProjectDocument; assets: AssetStore }> {
   const canvas = document.createElement("canvas");
   canvas.width = 96;
   canvas.height = 64;
@@ -310,7 +310,7 @@ test("createSessionFromDocument rebuilds a clean session with per-kind counters"
     dirty: false,
     counters: { raster: 1, solid: 1 },
   });
-  expect(createSessionFromDocument({ ...document, layers: "no" } as unknown as ProjectDocumentV1)).toBeNull();
+  expect(createSessionFromDocument({ ...document, layers: "no" } as unknown as ProjectDocument)).toBeNull();
 });
 
 test("header Save downloads <name>.rbxcloth.zip and clears dirty; double-tap saves once", async () => {
@@ -452,7 +452,7 @@ async function tamperedOpenResult(
   if (asset === undefined) {
     throw new Error("fixture asset missing");
   }
-  const tampered: ProjectDocumentV1 = { ...document, assets: document.assets.map(tamper) };
+  const tampered: ProjectDocument = { ...document, assets: document.assets.map(tamper) };
   const bytes = zipSync({
     "project.json": new TextEncoder().encode(JSON.stringify(tampered)),
     "assets/asset-1.png": asset.bytes,
