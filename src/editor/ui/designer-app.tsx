@@ -76,6 +76,18 @@ function fullMapItem(
   };
 }
 
+function solidRectangleTransform(garment: GarmentType): Transform {
+  const template = getTemplate(garment);
+  return {
+    positionX: template.width / 2,
+    positionY: template.height / 2,
+    rotationDeg: 0,
+    scaleX: Math.round(template.width * 0.4),
+    scaleY: Math.round(template.height * 0.3),
+    crop: { x: 0, y: 0, width: 1, height: 1 },
+  };
+}
+
 function topLayerId(session: EditorSession): string | null {
   const top = session.document.layers[session.document.layers.length - 1];
   return top?.id ?? null;
@@ -321,7 +333,14 @@ export function DesignerApp() {
       setNotice(ITEM_CAP_MESSAGE);
       return;
     }
-    const next = dispatch(current, { type: "add-item", item: { kind: "solid", color } });
+    const next = dispatch(current, {
+      type: "add-item",
+      item: {
+        kind: "solid",
+        color,
+        transform: solidRectangleTransform(current.document.garmentType),
+      },
+    });
     if (commitIfChanged(current, next)) {
       setSelectedItemId(addedLayerId(current, next));
     }

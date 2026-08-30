@@ -347,6 +347,29 @@ test("adding a color creates one undoable item and Fill Clothing shows active", 
   expect(segmentedButton(host, "Repeat").getAttribute("aria-pressed")).toBe("false");
 }, 10000);
 
+test("choosing another swatch with a color selected recolors it without adding an item", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await addColor(host, 0);
+  await waitFor(() => {
+    const [r, g, b, a] = pixelAt(host, 292, 230);
+    return r === 229 && g === 57 && b === 53 && a === 255;
+  }, "color rectangle paints the torso red");
+  await addColor(host, 3);
+  await waitFor(() => {
+    const [r, g, b, a] = pixelAt(host, 292, 230);
+    return r === 67 && g === 160 && b === 71 && a === 255;
+  }, "recolor changes the torso to green");
+  await openItems(host);
+  expect(itemNames(host)).toEqual(["Color 1"]);
+  await closeSheet(host, "Items", "Done");
+  (byLabel(host, "Undo") as HTMLButtonElement).click();
+  await waitFor(() => {
+    const [r, g, b, a] = pixelAt(host, 292, 230);
+    return r === 229 && g === 57 && b === 53 && a === 255;
+  }, "undo restores the red rectangle");
+}, 10000);
+
 test("items sheet supports rename, duplicate, visibility, reorder, and delete", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");

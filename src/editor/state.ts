@@ -18,7 +18,7 @@ export type TransformPatch = Partial<
 >;
 
 export type ItemSpec =
-  | { kind: "solid"; color: string }
+  | { kind: "solid"; color: string; transform: Transform }
   | { kind: "raster"; assetId: string; placement: PlacementMode; transform: Transform }
   | { kind: "cutout"; rect: CutoutRect };
 
@@ -614,6 +614,9 @@ function addItem(
   const firstCutout = doc.layers.findIndex((layer) => layer.kind === "cutout");
   const paintInsertIndex = firstCutout < 0 ? doc.layers.length : firstCutout;
   if (item.kind === "solid") {
+    if (!isTransformValid(item.transform)) {
+      return null;
+    }
     const next: LayerCounters = { ...counters, solid: counters.solid + 1 };
     const layer: Layer = {
       id: idFactory(),
@@ -622,8 +625,8 @@ function addItem(
       color: item.color,
       visible: true,
       opacity: 1,
-      placement: "pattern",
-      transform: solidDefaultTransform(),
+      placement: "decal",
+      transform: copyTransform(item.transform),
     };
     const layers = doc.layers.slice();
     layers.splice(paintInsertIndex, 0, layer);
@@ -752,17 +755,6 @@ function updateLayer(
     return null;
   }
   return replaceLayer(doc, index, update(layer));
-}
-
-function solidDefaultTransform(): Transform {
-  return {
-    positionX: 0,
-    positionY: 0,
-    rotationDeg: 0,
-    scaleX: 1,
-    scaleY: 1,
-    crop: { x: 0, y: 0, width: 1, height: 1 },
-  };
 }
 
 function copyTransform(transform: Transform): Transform {

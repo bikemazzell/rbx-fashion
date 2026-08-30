@@ -23,7 +23,18 @@ const rasterSpec: ItemSpec = {
   },
 };
 
-const solidSpec: ItemSpec = { kind: "solid", color: "#ff0000" };
+const solidSpec: ItemSpec = {
+  kind: "solid",
+  color: "#ff0000",
+  transform: {
+    positionX: 293,
+    positionY: 280,
+    rotationDeg: 0,
+    scaleX: 234,
+    scaleY: 168,
+    crop: { x: 0, y: 0, width: 1, height: 1 },
+  },
+};
 
 const cutoutRect: CutoutRect = {
   centerX: 120,
@@ -102,16 +113,32 @@ test("add-item raster appends a fully formed Picture layer", () => {
   expect(session.dirty).toBe(true);
 });
 
-test("add-item solid appends a Color layer covering the garment", () => {
+test("add-item solid appends a decal Color layer with the supplied rectangle", () => {
   const ids = makeIds();
   const session = add(createSession("pants"), solidSpec, ids);
   const layer = layerAt(session, 0);
   expect(layer.name).toBe("Color 1");
   expect(layer.kind).toBe("solid");
   expect(layer.color).toBe("#ff0000");
-  expect(layer.placement).toBe("pattern");
+  expect(layer.placement).toBe("decal");
+  expect(layer.transform).toEqual(solidSpec.transform);
   expect(layer.visible).toBe(true);
   expect(layer.opacity).toBe(1);
+});
+
+test("add-item solid rejects invalid rectangle transforms", () => {
+  const ids = makeIds();
+  const base = solidSpec.transform;
+  for (const transform of [
+    { ...base, positionX: Number.NaN },
+    { ...base, scaleX: 0 },
+    { ...base, scaleY: -168 },
+    { ...base, crop: { x: 0, y: 0, width: 2, height: 1 } },
+  ]) {
+    const session = add(createSession("pants"), { ...solidSpec, transform }, ids);
+    expect(session.document.layers).toHaveLength(0);
+    expect(session.dirty).toBe(false);
+  }
 });
 
 test("add-item creates a named cutout with copied rectangle geometry", () => {
