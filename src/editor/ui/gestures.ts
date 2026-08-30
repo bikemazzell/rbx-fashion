@@ -20,7 +20,10 @@ export interface FootprintGeometry {
   corners: readonly [Point, Point, Point, Point];
   scaleHandle: Point;
   rotateHandle: Point;
+  edgeHandles: { left: Point; right: Point; top: Point; bottom: Point };
 }
+
+export type EdgeId = "left" | "right" | "top" | "bottom";
 
 const ROTATE_HANDLE_OFFSET = 36;
 
@@ -68,6 +71,12 @@ export function footprintGeometry(
     ],
     scaleHandle: bounds === undefined ? rawScaleHandle : clampPoint(rawScaleHandle, bounds),
     rotateHandle: bounds === undefined ? rawRotateHandle : clampPoint(rawRotateHandle, bounds),
+    edgeHandles: {
+      left: map(-halfWidth, 0),
+      right: map(halfWidth, 0),
+      top: map(0, -halfHeight),
+      bottom: map(0, halfHeight),
+    },
   };
 }
 
@@ -95,9 +104,22 @@ const HANDLE_SCREEN_RADIUS = 22;
 const WHEEL_BURST_MS = 160;
 const WHEEL_SCALE_RATE = 0.0015;
 
+function directlyEditable(layer: Layer): boolean {
+  if (!layer.visible) {
+    return false;
+  }
+  if (layer.kind === "raster" || layer.kind === "cutout") {
+    return true;
+  }
+  return layer.placement === "decal";
+}
+
 function editableTransform(layer: Layer | undefined): Transform | null {
-  if (layer === undefined || layer.kind === "solid") {
+  if (layer === undefined) {
     return null;
+  }
+  if (layer.kind === "solid") {
+    return layer.placement === "decal" ? layer.transform : null;
   }
   if (layer.kind === "raster") {
     return layer.transform;
@@ -163,6 +185,14 @@ type ItemGesture =
       startRotation: number;
       lastAngleRad: number;
       cumulativeDeg: number;
+    })
+  | (GestureBase & {
+      kind: "edge";
+      edge: EdgeId;
+      center: Point;
+      rotationDeg: number;
+      startHalfWidth: number;
+      startHalfHeight: number;
     });
 
 interface TapPending {
@@ -256,11 +286,7 @@ export function createGestureController(options: GestureControllerOptions): { de
     const layers = options.getSession().document.layers;
     for (let index = layers.length - 1; index >= 0; index -= 1) {
       const layer = layers[index];
-      if (
-        layer === undefined ||
-        !layer.visible ||
-        (layer.kind !== "raster" && layer.kind !== "cutout")
-      ) {
+      if (layer === undefined || !directlyEditable(layer)) {
         continue;
       }
       const footprint = options.itemFootprint(layer.id);
@@ -320,6 +346,33 @@ export function createGestureController(options: GestureControllerOptions): { de
           ),
           startScaleX: transform.scaleX,
           startScaleY: transform.scaleY,
+          startTime: event.timeStamp,
+          downX: event.clientX,
+          downY: event.clientY,
+        };
+        return;
+      }
+      let nearestEdge: EdgeId | null = null;
+      let nearestEdgeDistance = tolerance;
+      for (const edge of ["left", "right", "top", "bottom"] as const) {
+        const handle = selectedFootprint.edgeHandles[edge];
+        const distance = Math.hypot(point.x - handle.x, point.y - handle.y);
+        if (distance <= nearestEdgeDistance) {
+          nearestEdge = edge;
+          nearestEdgeDistance = distance;
+        }
+      }
+      if (nearestEdge !== null) {
+        options.dispatch({ type: "begin-gesture" });
+        itemGesture = {
+          kind: "edge",
+          id: selectedId,
+          pointerId: event.pointerId,
+          edge: nearestEdge,
+          center: selectedFootprint.center,
+          rotationDeg: selectedFootprint.rotationDeg,
+          startHalfWidth: selectedFootprint.halfWidth,
+          startHalfHeight: selectedFootprint.halfHeight,
           startTime: event.timeStamp,
           downX: event.clientX,
           downY: event.clientY,
@@ -494,6 +547,38 @@ export function createGestureController(options: GestureControllerOptions): { de
       }
       return;
     }
+    if (gesture.kind === "edge") {
+      const rad = (gesture.rotationDeg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const dx = point.x - gesture.center.x;
+      const dy = point.y - gesture.center.y;
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos;
+      const minHalf = MIN_ITEM_SCALE / 2;
+      const patch: TransformPatch = {};
+      let shiftX = 0;
+      let shiftY = 0;
+      if (gesture.edge === "left" || gesture.edge === "right") {
+        const direction = gesture.edge === "right" ? 1 : -1;
+        const half = Math.max(minHalf, direction * localX);
+        shiftX = direction * (half - gesture.startHalfWidth);
+        patch.scaleX = half * 2;
+      } else {
+        const direction = gesture.edge === "bottom" ? 1 : -1;
+        const half = Math.max(minHalf, direction * localY);
+        shiftY = direction * (half - gesture.startHalfHeight);
+        patch.scaleY = half * 2;
+      }
+      const positionX = gesture.center.x + shiftX * cos - shiftY * sin;
+      const positionY = gesture.center.y + shiftX * sin + shiftY * cos;
+      patch.positionX = positionX;
+      patch.positionY = positionY;
+      if (Number.isFinite(positionX) && Number.isFinite(positionY)) {
+        scheduleItemUpdate(gesture.id, patch);
+      }
+      return;
+    }
     const angle = Math.atan2(point.y - gesture.center.y, point.x - gesture.center.x);
     let delta = angle - gesture.lastAngleRad;
     if (delta > Math.PI) {
@@ -663,11 +748,7 @@ export function createGestureController(options: GestureControllerOptions): { de
     const id = options.selectedId();
     if (id === null) return;
     const layer = options.getSession().document.layers.find((candidate) => candidate.id === id);
-    if (
-      layer === undefined ||
-      (layer.kind !== "raster" && layer.kind !== "cutout") ||
-      !layer.visible
-    ) return;
+    if (layer === undefined || !directlyEditable(layer)) return;
     const footprint = options.itemFootprint(id);
     if (footprint === null) return;
     const point = screenToCanvas(event.clientX, event.clientY);
@@ -709,11 +790,7 @@ export function createGestureController(options: GestureControllerOptions): { de
       return;
     }
     const layer = options.getSession().document.layers.find((candidate) => candidate.id === id);
-    if (
-      layer === undefined ||
-      (layer.kind !== "raster" && layer.kind !== "cutout") ||
-      !layer.visible
-    ) {
+    if (layer === undefined || !directlyEditable(layer)) {
       return;
     }
     const transform = editableTransform(layer);

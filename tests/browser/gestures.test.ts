@@ -720,10 +720,11 @@ test("wheel bursts over a selected picture scale it as one undo step and ignore 
 interface Harness {
   overlay: HTMLCanvasElement;
   actions: string[];
+  mutations: { op: string; patch: Record<string, number> }[];
   destroy: () => void;
 }
 
-function createHarness(kind: "raster" | "cutout" = "raster"): Harness {
+function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationDeg = 0): Harness {
   const host = document.createElement("div");
   host.style.cssText = "position:relative;width:600px;height:600px;";
   document.body.appendChild(host);
@@ -734,37 +735,67 @@ function createHarness(kind: "raster" | "cutout" = "raster"): Harness {
     "position:absolute;left:0;top:0;width:512px;height:512px;touch-action:none;";
   host.appendChild(overlay);
   const actions: string[] = [];
+  const mutations: { op: string; patch: Record<string, number> }[] = [];
+  const crop = { x: 0, y: 0, width: 1, height: 1 };
+  const footprintSource =
+    kind === "raster"
+      ? footprintGeometry(
+          { positionX: 256, positionY: 256, rotationDeg, scaleX: 1, scaleY: 1, crop },
+          { width: 400, height: 300 },
+        )
+      : footprintGeometry(
+          { positionX: 256, positionY: 256, rotationDeg, scaleX: 400, scaleY: 300, crop },
+          { width: 1, height: 1 },
+        );
   let session = createSession("tshirt");
   session = {
     ...session,
     document: {
       ...session.document,
-      layers: kind === "raster" ? [
-        {
-          id: "item-1",
-          name: "Picture 1",
-          kind: "raster",
-          assetId: "asset-1",
-          visible: true,
-          opacity: 1,
-          placement: "decal",
-          transform: {
-            positionX: 256,
-            positionY: 256,
-            rotationDeg: 0,
-            scaleX: 1,
-            scaleY: 1,
-            crop: { x: 0, y: 0, width: 1, height: 1 },
-          },
-        },
-      ] : [
-        {
-          id: "item-1",
-          name: "Cut Out 1",
-          kind: "cutout",
-          visible: true,
-          rect: { centerX: 256, centerY: 256, width: 400, height: 300, rotationDeg: 0 },
-        },
+      layers: [
+        kind === "raster"
+          ? {
+              id: "item-1",
+              name: "Picture 1",
+              kind: "raster",
+              assetId: "asset-1",
+              visible: true,
+              opacity: 1,
+              placement: "decal",
+              transform: {
+                positionX: 256,
+                positionY: 256,
+                rotationDeg,
+                scaleX: 1,
+                scaleY: 1,
+                crop: { x: 0, y: 0, width: 1, height: 1 },
+              },
+            }
+          : kind === "cutout"
+            ? {
+                id: "item-1",
+                name: "Cut Out 1",
+                kind: "cutout",
+                visible: true,
+                rect: { centerX: 256, centerY: 256, width: 400, height: 300, rotationDeg },
+              }
+            : {
+                id: "item-1",
+                name: "Color 1",
+                kind: "solid",
+                color: "#e53935",
+                visible: true,
+                opacity: 1,
+                placement: "decal",
+                transform: {
+                  positionX: 256,
+                  positionY: 256,
+                  rotationDeg,
+                  scaleX: 400,
+                  scaleY: 300,
+                  crop: { x: 0, y: 0, width: 1, height: 1 },
+                },
+              },
       ],
     },
   };
@@ -774,29 +805,23 @@ function createHarness(kind: "raster" | "cutout" = "raster"): Harness {
     getSession: () => session,
     dispatch: (action) => {
       actions.push(action.type === "update-gesture" ? action.mutation.op : action.type);
+      if (action.type === "update-gesture" && "patch" in action.mutation) {
+        mutations.push({
+          op: action.mutation.op,
+          patch: action.mutation.patch as Record<string, number>,
+        });
+      }
       session = harnessReduce(session, action);
     },
     onSelect: () => {},
     selectedId: () => "item-1",
-    itemFootprint: () => ({
-      center: { x: 256, y: 256 },
-      rotationDeg: 0,
-      halfWidth: 200,
-      halfHeight: 150,
-      corners: [
-        { x: 56, y: 106 },
-        { x: 456, y: 106 },
-        { x: 456, y: 406 },
-        { x: 56, y: 406 },
-      ],
-      scaleHandle: { x: 456, y: 406 },
-      rotateHandle: { x: 256, y: 70 },
-    }),
+    itemFootprint: () => footprintSource,
     onViewportChange: () => {},
   });
   return {
     overlay,
     actions,
+    mutations,
     destroy: () => {
       controller.destroy();
       host.remove();
@@ -833,6 +858,138 @@ test("cutout move, scale, rotate, and wheel gestures use cutout mutations", asyn
       }),
     );
     expect(harness.actions).toContain("patch-cutout");
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("footprintGeometry reports edge midpoint handles in axis-aligned and rotated frames", () => {
+  const flat = footprintGeometry(DECAL_DEFAULT, { width: 400, height: 300 });
+  expect(flat.edgeHandles.left).toEqual({ x: 56, y: 256 });
+  expect(flat.edgeHandles.right).toEqual({ x: 456, y: 256 });
+  expect(flat.edgeHandles.top).toEqual({ x: 256, y: 106 });
+  expect(flat.edgeHandles.bottom).toEqual({ x: 256, y: 406 });
+
+  const turned = footprintGeometry(
+    { ...DECAL_DEFAULT, rotationDeg: 90 },
+    { width: 400, height: 300 },
+  );
+  expect(turned.edgeHandles.left.x).toBeCloseTo(256, 6);
+  expect(turned.edgeHandles.left.y).toBeCloseTo(56, 6);
+  expect(turned.edgeHandles.right.x).toBeCloseTo(256, 6);
+  expect(turned.edgeHandles.right.y).toBeCloseTo(456, 6);
+  expect(turned.edgeHandles.top.x).toBeCloseTo(406, 6);
+  expect(turned.edgeHandles.top.y).toBeCloseTo(256, 6);
+  expect(turned.edgeHandles.bottom.x).toBeCloseTo(106, 6);
+  expect(turned.edgeHandles.bottom.y).toBeCloseTo(256, 6);
+});
+
+test("side handle drags resize one edge, keep the opposite edge fixed, and commit once", async () => {
+  const harness = createHarness();
+  try {
+    const drags: { down: [number, number]; up: [number, number]; expected: Record<string, number> }[] = [
+      { down: [456, 256], up: [506, 256], expected: { scaleX: 500, positionX: 306, positionY: 256 } },
+      { down: [56, 256], up: [26, 256], expected: { scaleX: 460, positionX: 226, positionY: 256 } },
+      { down: [256, 106], up: [256, 76], expected: { scaleY: 360, positionX: 256, positionY: 226 } },
+      { down: [256, 406], up: [256, 456], expected: { scaleY: 400, positionX: 256, positionY: 306 } },
+    ];
+    for (const drag of drags) {
+      harness.actions.length = 0;
+      harness.mutations.length = 0;
+      harnessPointer(harness, "pointerdown", 1, drag.down[0], drag.down[1]);
+      harnessPointer(harness, "pointermove", 1, drag.up[0], drag.up[1]);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      harnessPointer(harness, "pointerup", 1, drag.up[0], drag.up[1]);
+      expect(harness.actions).toEqual(["begin-gesture", "patch-transform", "commit-gesture"]);
+      expect(harness.mutations).toHaveLength(1);
+      expect(harness.mutations[0]?.op).toBe("patch-transform");
+      expect(harness.mutations[0]?.patch).toMatchObject(drag.expected);
+    }
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("side handle drags on a cutout patch the rect through cutout mutations", async () => {
+  const harness = createHarness("cutout");
+  try {
+    harnessPointer(harness, "pointerdown", 1, 456, 256);
+    harnessPointer(harness, "pointermove", 1, 516, 256);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 516, 256);
+    expect(harness.actions).toContain("commit-gesture");
+    expect(harness.mutations).toHaveLength(1);
+    expect(harness.mutations[0]?.op).toBe("patch-cutout");
+    expect(harness.mutations[0]?.patch).toMatchObject({ width: 520, centerX: 316, centerY: 256 });
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("side handle drags on a decal solid patch the rectangle transform", async () => {
+  const harness = createHarness("solid");
+  try {
+    harnessPointer(harness, "pointerdown", 1, 456, 256);
+    harnessPointer(harness, "pointermove", 1, 506, 256);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 506, 256);
+    expect(harness.actions).toEqual(["begin-gesture", "patch-transform", "commit-gesture"]);
+    expect(harness.mutations[0]?.patch).toMatchObject({ scaleX: 500, positionX: 306, positionY: 256 });
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("side handle drags on a rotated cutout move the edge along the rotated axis", async () => {
+  const harness = createHarness("cutout", 90);
+  try {
+    harnessPointer(harness, "pointerdown", 1, 256, 456);
+    harnessPointer(harness, "pointermove", 1, 256, 496);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 256, 496);
+    expect(harness.mutations).toHaveLength(1);
+    expect(harness.mutations[0]?.op).toBe("patch-cutout");
+    expect(harness.mutations[0]?.patch).toMatchObject({ width: 480, centerX: 256, centerY: 296 });
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("side handle drags clamp to a small minimum when the pointer crosses the opposite edge", async () => {
+  const harness = createHarness();
+  try {
+    harnessPointer(harness, "pointerdown", 1, 456, 256);
+    harnessPointer(harness, "pointermove", 1, 100, 256);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 100, 256);
+    const patch = harness.mutations[0]?.patch;
+    expect(patch?.scaleX).toBeCloseTo(0.01, 6);
+    expect(patch?.positionX).toBeCloseTo(56.005, 6);
+    expect(patch?.positionY).toBeCloseTo(256, 6);
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("side handles win over the interior move drag within their 44px target", async () => {
+  const harness = createHarness();
+  try {
+    harnessPointer(harness, "pointerdown", 1, 466, 262);
+    harnessPointer(harness, "pointermove", 1, 516, 262);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 516, 262);
+    expect(harness.mutations).toHaveLength(1);
+    expect(harness.mutations[0]?.op).toBe("patch-transform");
+    expect(harness.mutations[0]?.patch.scaleX).toBeCloseTo(520, 6);
+
+    harness.mutations.length = 0;
+    harnessPointer(harness, "pointerdown", 1, 450, 258);
+    harnessPointer(harness, "pointermove", 1, 500, 258);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 1, 500, 258);
+    expect(harness.mutations).toHaveLength(1);
+    expect(harness.mutations[0]?.patch.scaleX).toBeCloseTo(488, 6);
+    expect(harness.mutations[0]?.patch.positionX).toBeCloseTo(300, 6);
   } finally {
     harness.destroy();
   }
