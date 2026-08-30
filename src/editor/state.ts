@@ -2,6 +2,7 @@ import { createProject } from "../domain/project";
 import { LIMITS } from "../domain/types";
 import type {
   AssetManifestEntry,
+  CutoutRect,
   GarmentType,
   Layer,
   PaintLayer,
@@ -18,10 +19,14 @@ export type TransformPatch = Partial<
 
 export type ItemSpec =
   | { kind: "solid"; color: string }
-  | { kind: "raster"; assetId: string; placement: PlacementMode; transform: Transform };
+  | { kind: "raster"; assetId: string; placement: PlacementMode; transform: Transform }
+  | { kind: "cutout"; rect: CutoutRect };
+
+export type CutoutRectPatch = Partial<CutoutRect>;
 
 export type GestureMutation =
   | { op: "patch-transform"; id: string; patch: TransformPatch }
+  | { op: "patch-cutout"; id: string; patch: CutoutRectPatch }
   | { op: "set-opacity"; id: string; opacity: number }
   | { op: "set-color"; id: string; color: string }
   | { op: "set-placement"; id: string; placement: PlacementMode };
@@ -36,6 +41,7 @@ export type EditorAction =
   | { type: "delete-item"; id: string }
   | { type: "set-placement"; id: string; placement: PlacementMode }
   | { type: "patch-transform"; id: string; patch: TransformPatch }
+  | { type: "patch-cutout"; id: string; patch: CutoutRectPatch }
   | { type: "set-opacity"; id: string; opacity: number }
   | { type: "set-color"; id: string; color: string }
   | { type: "mark-saved" }
@@ -49,6 +55,7 @@ export type EditorAction =
 export interface LayerCounters {
   raster: number;
   solid: number;
+  cutout: number;
 }
 
 export interface EditorSession {
@@ -74,6 +81,7 @@ type MutatingAction = Extract<
       | "delete-item"
       | "set-placement"
       | "patch-transform"
+      | "patch-cutout"
       | "set-opacity"
       | "set-color";
   }
@@ -93,7 +101,7 @@ export function createSession(garment: GarmentType, name?: string): EditorSessio
     redo: [],
     pending: null,
     dirty: false,
-    counters: { raster: 0, solid: 0 },
+    counters: { raster: 0, solid: 0, cutout: 0 },
   };
 }
 
@@ -333,12 +341,14 @@ export function createSessionFromDocument(document: ProjectDocument): EditorSess
   if (!isValidProjectDocument(document)) {
     return null;
   }
-  const counters: LayerCounters = { raster: 0, solid: 0 };
+  const counters: LayerCounters = { raster: 0, solid: 0, cutout: 0 };
   for (const layer of document.layers) {
     if (layer.kind === "raster") {
       counters.raster += 1;
     } else if (layer.kind === "solid") {
       counters.solid += 1;
+    } else {
+      counters.cutout += 1;
     }
   }
   return { document, undo: [], redo: [], pending: null, dirty: false, counters };
@@ -461,6 +471,8 @@ function toMutatingAction(mutation: GestureMutation): MutatingAction {
   switch (mutation.op) {
     case "patch-transform":
       return { type: "patch-transform", id: mutation.id, patch: mutation.patch };
+    case "patch-cutout":
+      return { type: "patch-cutout", id: mutation.id, patch: mutation.patch };
     case "set-opacity":
       return { type: "set-opacity", id: mutation.id, opacity: mutation.opacity };
     case "set-color":
@@ -533,6 +545,21 @@ function mutate(
       }));
       return document === null ? null : accepted(document, counters);
     }
+    case "patch-cutout": {
+      if (!isCutoutRectPatchValid(action.patch)) {
+        return null;
+      }
+      const index = layerIndex(doc, action.id);
+      const layer = index < 0 ? undefined : doc.layers[index];
+      if (layer === undefined || layer.kind !== "cutout") {
+        return null;
+      }
+      const rect = { ...layer.rect, ...action.patch };
+      if (!isCutoutRectValid(rect)) {
+        return null;
+      }
+      return accepted(replaceLayer(doc, index, { ...layer, rect }), counters);
+    }
     case "set-opacity": {
       if (!isOpacityValid(action.opacity)) {
         return null;
@@ -567,6 +594,22 @@ function addItem(
   if (doc.layers.length >= LIMITS.MAX_LAYERS) {
     return null;
   }
+  if (item.kind === "cutout") {
+    if (!isCutoutRectValid(item.rect)) {
+      return null;
+    }
+    const next: LayerCounters = { ...counters, cutout: counters.cutout + 1 };
+    const layer: Layer = {
+      id: idFactory(),
+      name: `Cut Out ${next.cutout}`,
+      kind: "cutout",
+      visible: true,
+      rect: { ...item.rect },
+    };
+    return accepted({ ...doc, layers: [...doc.layers, layer] }, next);
+  }
+  const firstCutout = doc.layers.findIndex((layer) => layer.kind === "cutout");
+  const paintInsertIndex = firstCutout < 0 ? doc.layers.length : firstCutout;
   if (item.kind === "solid") {
     const next: LayerCounters = { ...counters, solid: counters.solid + 1 };
     const layer: Layer = {
@@ -579,7 +622,9 @@ function addItem(
       placement: "pattern",
       transform: solidDefaultTransform(),
     };
-    return accepted({ ...doc, layers: [...doc.layers, layer] }, next);
+    const layers = doc.layers.slice();
+    layers.splice(paintInsertIndex, 0, layer);
+    return accepted({ ...doc, layers }, next);
   }
   if (!isTransformValid(item.transform)) {
     return null;
@@ -595,7 +640,9 @@ function addItem(
     placement: item.placement,
     transform: copyTransform(item.transform),
   };
-  return accepted({ ...doc, layers: [...doc.layers, layer] }, next);
+  const layers = doc.layers.slice();
+  layers.splice(paintInsertIndex, 0, layer);
+  return accepted({ ...doc, layers }, next);
 }
 
 function duplicateItem(
@@ -613,7 +660,14 @@ function duplicateItem(
     return null;
   }
   if (source.kind === "cutout") {
-    return null;
+    const next: LayerCounters = { ...counters, cutout: counters.cutout + 1 };
+    const copy: Layer = {
+      ...source,
+      id: idFactory(),
+      name: `Cut Out ${next.cutout}`,
+      rect: { ...source.rect },
+    };
+    return accepted({ ...doc, layers: [...doc.layers, copy] }, next);
   }
   const next: LayerCounters =
     source.kind === "solid"
@@ -626,7 +680,11 @@ function duplicateItem(
     name,
     transform: copyTransform(source.transform),
   };
-  return accepted({ ...doc, layers: [...doc.layers, copy] }, next);
+  const firstCutout = doc.layers.findIndex((layer) => layer.kind === "cutout");
+  const insertIndex = firstCutout < 0 ? doc.layers.length : firstCutout;
+  const layers = doc.layers.slice();
+  layers.splice(insertIndex, 0, copy);
+  return accepted({ ...doc, layers }, next);
 }
 
 function reorderLayer(
@@ -642,12 +700,18 @@ function reorderLayer(
   if (from < 0) {
     return null;
   }
+  const source = doc.layers[from];
+  if (source === undefined || source.kind === "cutout") {
+    return null;
+  }
+  const firstCutout = doc.layers.findIndex((layer) => layer.kind === "cutout");
+  const paintCount = firstCutout < 0 ? doc.layers.length : firstCutout;
   const layers = doc.layers.slice();
   const [moved] = layers.splice(from, 1);
   if (moved === undefined) {
     return null;
   }
-  const clamped = Math.min(Math.max(Math.trunc(toIndex), 0), layers.length);
+  const clamped = Math.min(Math.max(Math.trunc(toIndex), 0), paintCount - 1);
   layers.splice(clamped, 0, moved);
   return accepted({ ...doc, layers }, counters);
 }
@@ -743,6 +807,28 @@ function isTransformPatchValid(patch: TransformPatch): boolean {
     (patch.scaleX === undefined || (Number.isFinite(patch.scaleX) && patch.scaleX > 0)) &&
     (patch.scaleY === undefined || (Number.isFinite(patch.scaleY) && patch.scaleY > 0)) &&
     (patch.crop === undefined || isCropValid(patch.crop))
+  );
+}
+
+function isCutoutRectValid(rect: CutoutRect): boolean {
+  return (
+    Number.isFinite(rect.centerX) &&
+    Number.isFinite(rect.centerY) &&
+    Number.isFinite(rect.rotationDeg) &&
+    Number.isFinite(rect.width) &&
+    rect.width > 0 &&
+    Number.isFinite(rect.height) &&
+    rect.height > 0
+  );
+}
+
+function isCutoutRectPatchValid(patch: CutoutRectPatch): boolean {
+  return (
+    (patch.centerX === undefined || Number.isFinite(patch.centerX)) &&
+    (patch.centerY === undefined || Number.isFinite(patch.centerY)) &&
+    (patch.rotationDeg === undefined || Number.isFinite(patch.rotationDeg)) &&
+    (patch.width === undefined || (Number.isFinite(patch.width) && patch.width > 0)) &&
+    (patch.height === undefined || (Number.isFinite(patch.height) && patch.height > 0))
   );
 }
 

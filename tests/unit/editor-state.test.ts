@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { createProject } from "../../src/domain/project";
-import type { PaintLayer } from "../../src/domain/types";
+import type { CutoutLayer, CutoutRect, PaintLayer } from "../../src/domain/types";
 import { createSession, dispatch } from "../../src/editor/state";
 import type {
   EditorSession,
@@ -24,6 +24,16 @@ const rasterSpec: ItemSpec = {
 };
 
 const solidSpec: ItemSpec = { kind: "solid", color: "#ff0000" };
+
+const cutoutRect: CutoutRect = {
+  centerX: 120,
+  centerY: 140,
+  width: 80,
+  height: 60,
+  rotationDeg: 0,
+};
+
+const cutoutSpec = { kind: "cutout", rect: cutoutRect } as unknown as ItemSpec;
 
 function makeIds(): () => string {
   let n = 0;
@@ -50,6 +60,14 @@ function layerAt(s: EditorSession, index: number): PaintLayer {
   const layer = s.document.layers[index];
   if (layer === undefined || layer.kind === "cutout") {
     throw new Error(`no paint layer at index ${index}`);
+  }
+  return layer;
+}
+
+function cutoutAt(s: EditorSession, index: number): CutoutLayer {
+  const layer = s.document.layers[index];
+  if (layer === undefined || layer.kind !== "cutout") {
+    throw new Error(`no cutout layer at index ${index}`);
   }
   return layer;
 }
@@ -94,6 +112,88 @@ test("add-item solid appends a Color layer covering the garment", () => {
   expect(layer.placement).toBe("pattern");
   expect(layer.visible).toBe(true);
   expect(layer.opacity).toBe(1);
+});
+
+test("add-item creates a named cutout with copied rectangle geometry", () => {
+  const ids = makeIds();
+  let session: EditorSession | undefined;
+  expect(() => {
+    session = add(createSession("shirt"), cutoutSpec, ids);
+  }).not.toThrow();
+  expect(session).toBeDefined();
+  if (session === undefined) return;
+  expect(cutoutAt(session, 0)).toEqual({
+    id: "layer-1",
+    name: "Cut Out 1",
+    kind: "cutout",
+    visible: true,
+    rect: cutoutRect,
+  });
+  expect(cutoutAt(session, 0).rect).not.toBe(cutoutRect);
+  expect(session.undo).toEqual([createProject("shirt")]);
+});
+
+test("paint stays before the cutout suffix and cutouts cannot be reordered", () => {
+  const ids = makeIds();
+  let session = add(createSession("shirt"), cutoutSpec, ids);
+  session = add(session, solidSpec, ids);
+  session = add(session, cutoutSpec, ids);
+  expect(session.document.layers.map((layer) => layer.kind)).toEqual([
+    "solid",
+    "cutout",
+    "cutout",
+  ]);
+  const unchanged = dispatch(session, { type: "reorder-item", id: "layer-1", toIndex: 0 }, ids);
+  expect(unchanged).toEqual(session);
+  const paintBlocked = dispatch(session, { type: "reorder-item", id: "layer-2", toIndex: 99 }, ids);
+  expect(paintBlocked.document.layers.map((layer) => layer.kind)).toEqual([
+    "solid",
+    "cutout",
+    "cutout",
+  ]);
+});
+
+test("duplicate, visibility, rectangle patch, undo, and delete work for cutouts", () => {
+  const ids = makeIds();
+  let session = add(createSession("pants"), cutoutSpec, ids);
+  session = dispatch(session, { type: "duplicate-item", id: "layer-1" }, ids);
+  expect(cutoutAt(session, 1).name).toBe("Cut Out 2");
+  expect(cutoutAt(session, 1).rect).not.toBe(cutoutAt(session, 0).rect);
+  session = dispatch(session, { type: "toggle-visibility", id: "layer-2" }, ids);
+  expect(cutoutAt(session, 1).visible).toBe(false);
+  session = dispatch(
+    session,
+    {
+      type: "patch-cutout",
+      id: "layer-1",
+      patch: { width: 100, centerX: 222 },
+    } as never,
+    ids,
+  );
+  expect(cutoutAt(session, 0).rect).toEqual({ ...cutoutRect, width: 100, centerX: 222 });
+  const undone = dispatch(session, { type: "undo" }, ids);
+  expect(cutoutAt(undone, 0).rect).toEqual(cutoutRect);
+  const deleted = dispatch(session, { type: "delete-item", id: "layer-1" }, ids);
+  expect(deleted.document.layers.map((layer) => layer.name)).toEqual(["Cut Out 2"]);
+});
+
+test("cutouts share the eight-item cap and reject invalid rectangle patches", () => {
+  const ids = makeIds();
+  let session = createSession("shirt");
+  for (let index = 0; index < 8; index += 1) {
+    session = add(session, cutoutSpec, ids);
+  }
+  expect(session.document.layers).toHaveLength(8);
+  expect(add(session, cutoutSpec, ids)).toEqual(session);
+  for (const patch of [{ width: 0 }, { height: -1 }, { centerX: Number.NaN }]) {
+    expect(
+      dispatch(
+        session,
+        { type: "patch-cutout", id: "layer-1", patch } as never,
+        ids,
+      ),
+    ).toEqual(session);
+  }
 });
 
 test("eight adds succeed; the ninth is rejected unchanged including history", () => {
