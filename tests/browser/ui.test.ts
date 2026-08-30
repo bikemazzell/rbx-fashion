@@ -261,6 +261,39 @@ test("a new editor points to Add and disables Repeat until a visible picture is 
   ]);
 });
 
+test("cutouts have focused controls, visible transparency, and no dead reorder buttons", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await addColor(host, 0);
+  toolbarButton(host, "Add").click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  const overlay = requireEl(host.querySelector(".workspace-overlay"), "overlay") as HTMLCanvasElement;
+  const rect = overlay.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, clientX: x, clientY: y }));
+  overlay.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: x, clientY: y }));
+  await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "cutout selected");
+  expect(host.querySelector(".segmented")).toBeNull();
+  expect(getComputedStyle(workspaceCanvas(host)).backgroundImage).not.toBe("none");
+  await waitFor(() => pixelAt(host, 292, 279)[3] === 0, "cutout clears center");
+
+  moreButton(host).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "cutout more");
+  expect(Array.from(dialog(host, "More").querySelectorAll("input")).map((input) => input.getAttribute("aria-label"))).toEqual([
+    "Left/Right", "Up/Down", "Turn", "Size", "Wide", "Tall",
+  ]);
+  await closeSheet(host, "More", "Done");
+  await openItems(host);
+  expect(itemNames(host)[0]).toBe("Cut Out 1");
+  expect(itemRows(host)[0]?.querySelector('[aria-label="Move Up"]')).toBeNull();
+  expect(itemRows(host)[0]?.querySelector('[aria-label="Move Down"]')).toBeNull();
+  const paintUp = itemRows(host)[1]?.querySelector<HTMLButtonElement>('[aria-label="Move Up"]');
+  expect(paintUp?.disabled).toBe(true);
+}, 10000);
+
 test("adding a color creates one undoable item and Fill Clothing shows active", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
@@ -587,7 +620,7 @@ test("dirty projects confirm before starting new; clean projects switch immediat
   );
   const unsaved = dialog(host, "Start a new project?");
   expect(unsaved.textContent).toContain("Start a new project? Your changes will be lost.");
-  expect(document.activeElement?.textContent).toBe("Keep Editing");
+  await waitFor(() => document.activeElement?.textContent === "Keep Editing", "keep editing receives focus");
   const startNew = byText(host, "Start New");
   expect(getComputedStyle(startNew).backgroundColor).toBe("rgb(29, 78, 216)");
   expect(getComputedStyle(startNew).color).toBe("rgb(255, 255, 255)");

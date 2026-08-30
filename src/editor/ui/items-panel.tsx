@@ -25,7 +25,8 @@ export function ItemsPanel(props: ItemsPanelProps) {
     <ul class="items-list">
       {props.layersTopFirst.map((layer, displayIndex) => {
         const zIndex = count - 1 - displayIndex;
-        const upDisabled = zIndex === count - 1;
+        const layerAbove = props.layersTopFirst[displayIndex - 1];
+        const upDisabled = zIndex === count - 1 || layerAbove?.kind === "cutout";
         const downDisabled = zIndex === 0;
         return (
           <li
@@ -67,26 +68,30 @@ export function ItemsPanel(props: ItemsPanelProps) {
               <IconDuplicate />
               <span class="item-tool-label">Copy</span>
             </button>
-            <button
-              type="button"
-              class="item-tool"
-              aria-label="Move Up"
-              disabled={upDisabled}
-              aria-disabled={upDisabled ? "true" : "false"}
-              onClick={() => props.onReorder(layer.id, 1)}
-            >
-              <IconUp />
-            </button>
-            <button
-              type="button"
-              class="item-tool"
-              aria-label="Move Down"
-              disabled={downDisabled}
-              aria-disabled={downDisabled ? "true" : "false"}
-              onClick={() => props.onReorder(layer.id, -1)}
-            >
-              <IconDown />
-            </button>
+            {layer.kind !== "cutout" && (
+              <>
+                <button
+                  type="button"
+                  class="item-tool"
+                  aria-label="Move Up"
+                  disabled={upDisabled}
+                  aria-disabled={upDisabled ? "true" : "false"}
+                  onClick={() => props.onReorder(layer.id, 1)}
+                >
+                  <IconUp />
+                </button>
+                <button
+                  type="button"
+                  class="item-tool"
+                  aria-label="Move Down"
+                  disabled={downDisabled}
+                  aria-disabled={downDisabled ? "true" : "false"}
+                  onClick={() => props.onReorder(layer.id, -1)}
+                >
+                  <IconDown />
+                </button>
+              </>
+            )}
             <button
               type="button"
               class="item-tool item-tool-delete"

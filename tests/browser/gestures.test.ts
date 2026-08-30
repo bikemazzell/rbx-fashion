@@ -208,6 +208,45 @@ test("full-map and oversized artwork handles stay inside the clothing canvas", (
   }
 });
 
+test("Add Cut Out draws one selected rectangle and a tap creates a useful default", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "cutout instructions");
+
+  const start = canvasToScreen(host, 120, 100);
+  const end = canvasToScreen(host, 360, 280);
+  pointer(host, "pointerdown", 1, start.x, start.y);
+  pointer(host, "pointermove", 1, end.x, end.y);
+  await waitFor(
+    () => host.querySelector(".workspace-overlay")?.getAttribute("data-has-cutout-draft") === "true",
+    "live cutout draft",
+  );
+  pointer(host, "pointerup", 1, end.x, end.y);
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "drawing completes");
+  expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Cut Out");
+  await openMore(host);
+  expect(moreField(host, "Wide")).toBe(240);
+  expect(moreField(host, "Tall")).toBe(180);
+  expect(moreField(host, "Left/Right")).toBe(240);
+  expect(moreField(host, "Up/Down")).toBe(190);
+  (byLabel(host, "Done") as HTMLButtonElement).click();
+
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet again");
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "tap cutout instructions");
+  const tap = canvasToScreen(host, 450, 400);
+  pointer(host, "pointerdown", 1, tap.x, tap.y);
+  pointer(host, "pointerup", 1, tap.x, tap.y);
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "tap completes");
+  await openMore(host);
+  expect(moreField(host, "Wide")).toBeGreaterThan(20);
+  expect(moreField(host, "Tall")).toBeGreaterThan(20);
+}, 10000);
+
 test("move drag on the selected item is one undo step and restores on undo", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");

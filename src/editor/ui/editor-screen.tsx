@@ -1,6 +1,6 @@
 import type { Ref } from "preact";
 import type { AssetStore } from "../../assets/store";
-import type { Layer, PlacementMode, ProjectDocument } from "../../domain/types";
+import type { CutoutRect, Layer, PlacementMode, ProjectDocument } from "../../domain/types";
 import type { EditorAction, EditorSession, TransformPatch } from "../state";
 import {
   IconAdd,
@@ -54,6 +54,7 @@ export interface EditorScreenProps {
   redoRef: Ref<HTMLButtonElement>;
   undoDisabled: boolean;
   redoDisabled: boolean;
+  drawingCutout: boolean;
   onNew: () => void;
   onSave: () => void;
   onOpen: () => void;
@@ -73,6 +74,10 @@ export interface EditorScreenProps {
   onDelete: (id: string) => void;
   onTransformCommit: (patch: TransformPatch) => void;
   onOpacityCommit: (percent: number) => void;
+  onCutoutCommit: (patch: Partial<CutoutRect>) => void;
+  onStartCutout: () => void;
+  onCreateCutout: (rect: CutoutRect) => void;
+  onCancelCutout: () => void;
   onFile: (file: File) => void;
   onSwatch: (color: string) => void;
   generateEnabled: boolean;
@@ -169,7 +174,9 @@ export function EditorScreen(props: EditorScreenProps) {
           <section class="pane pane-edit" aria-label="Edit">
             {selected !== null && (
               <div class="selection-bar">
-                <div class="segmented" role="group" aria-label="Placement">
+                {selected.kind === "cutout" ? (
+                  <strong class="cutout-selection-label">Cut Out</strong>
+                ) : <div class="segmented" role="group" aria-label="Placement">
                   {PLACEMENTS.map(({ label, value }) => (
                     <button
                       key={value}
@@ -183,7 +190,7 @@ export function EditorScreen(props: EditorScreenProps) {
                       {label}
                     </button>
                   ))}
-                </div>
+                </div>}
                 <button
                   type="button"
                   class="more-button"
@@ -202,6 +209,9 @@ export function EditorScreen(props: EditorScreenProps) {
               getSession={props.getSession}
               dispatch={props.dispatch}
               onSelect={props.onSelect}
+              drawingCutout={props.drawingCutout}
+              onCreateCutout={props.onCreateCutout}
+              onCancelCutout={props.onCancelCutout}
             />
           </section>
           <section class="pane pane-preview" aria-label="Preview">
@@ -282,6 +292,7 @@ export function EditorScreen(props: EditorScreenProps) {
           onPicture={props.onFile}
           onChooseColor={() => props.onToolbar("color")}
           onGenerate={props.generateEnabled ? props.onGenerateFromAdd : undefined}
+          onCutout={props.onStartCutout}
           onCancel={props.onCloseSheet}
         />
       )}
@@ -310,6 +321,7 @@ export function EditorScreen(props: EditorScreenProps) {
           layer={selected}
           onTransformCommit={props.onTransformCommit}
           onOpacityCommit={props.onOpacityCommit}
+          onCutoutCommit={props.onCutoutCommit}
           onClose={props.onCloseSheet}
         />
       )}

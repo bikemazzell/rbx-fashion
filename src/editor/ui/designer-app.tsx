@@ -8,6 +8,7 @@ import { getTemplate } from "../../domain/registry";
 import { LIMITS } from "../../domain/types";
 import type {
   AssetManifestEntry,
+  CutoutRect,
   GarmentType,
   PlacementMode,
   TemplateRegistryEntry,
@@ -96,6 +97,7 @@ export function DesignerApp() {
   const [session, setSession] = useState<EditorSession | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
+  const [drawingCutout, setDrawingCutout] = useState(false);
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [pendingStart, setPendingStart] = useState<PendingStart | null>(null);
   const [pendingRaster, setPendingRaster] = useState<PendingRaster | null>(null);
@@ -213,6 +215,7 @@ export function DesignerApp() {
     setComposeError(null);
     setTransparentWarning(null);
     setActiveTab("edit");
+    setDrawingCutout(false);
   };
 
   const startGarment = (garment: GarmentType) => {
@@ -560,6 +563,7 @@ export function DesignerApp() {
   };
 
   const onToolbar = (tool: "add" | "move" | "repeat" | "color" | "preview" | "export") => {
+    setDrawingCutout(false);
     if (tool === "add") {
       setSheet("add");
     } else if (tool === "move") {
@@ -727,6 +731,36 @@ export function DesignerApp() {
     apply({ type: "set-opacity", id: selectedLayer.id, opacity: clamped / 100 });
   };
 
+  const onStartCutout = () => {
+    const current = sessionRef.current;
+    if (current === null) return;
+    if (current.document.layers.length >= LIMITS.MAX_LAYERS) {
+      setSheet(null);
+      setNotice(ITEM_CAP_MESSAGE);
+      return;
+    }
+    setSheet(null);
+    setActiveTab("edit");
+    setDrawingCutout(true);
+  };
+
+  const onCreateCutout = (rect: CutoutRect) => {
+    const current = sessionRef.current;
+    if (current === null || current.document.layers.length >= LIMITS.MAX_LAYERS) {
+      setDrawingCutout(false);
+      setNotice(ITEM_CAP_MESSAGE);
+      return;
+    }
+    const next = dispatch(current, { type: "add-item", item: { kind: "cutout", rect } });
+    if (commitIfChanged(current, next)) setSelectedItemId(topLayerId(next));
+    setDrawingCutout(false);
+  };
+
+  const onCutoutCommit = (patch: Partial<CutoutRect>) => {
+    if (selectedLayer?.kind !== "cutout") return;
+    apply({ type: "patch-cutout", id: selectedLayer.id, patch });
+  };
+
   if (session === null) {
     return (
       <>
@@ -775,6 +809,7 @@ export function DesignerApp() {
         redoRef={redoRef}
         undoDisabled={undoDisabled}
         redoDisabled={redoDisabled}
+        drawingCutout={drawingCutout}
         onNew={onNew}
         onSave={() => void onSave()}
         onOpen={requestOpen}
@@ -794,6 +829,10 @@ export function DesignerApp() {
         onDelete={onDelete}
         onTransformCommit={onTransformCommit}
         onOpacityCommit={onOpacityCommit}
+        onCutoutCommit={onCutoutCommit}
+        onStartCutout={onStartCutout}
+        onCreateCutout={onCreateCutout}
+        onCancelCutout={() => setDrawingCutout(false)}
         onFile={handleFile}
         onSwatch={onSwatch}
         generateEnabled={generateEnabled}

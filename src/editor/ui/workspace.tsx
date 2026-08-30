@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { AssetStore } from "../../assets/store";
 import { composeProject } from "../../compositor/compose";
 import { getTemplate } from "../../domain/registry";
-import type { Layer, ProjectDocument, Rect, TemplateRegistryEntry } from "../../domain/types";
+import type { CutoutRect, Layer, ProjectDocument, Rect, TemplateRegistryEntry } from "../../domain/types";
 import type { EditorAction, EditorSession } from "../state";
 import { createGestureController, footprintGeometry } from "./gestures";
 import type { Point, Viewport } from "./gestures";
@@ -16,6 +16,9 @@ interface WorkspaceProps {
   getSession: () => EditorSession;
   dispatch: (action: EditorAction) => void;
   onSelect: (id: string | null) => void;
+  drawingCutout: boolean;
+  onCreateCutout: (rect: CutoutRect) => void;
+  onCancelCutout: () => void;
 }
 
 function patternBounds(template: TemplateRegistryEntry): Rect {
@@ -149,8 +152,18 @@ export function Workspace(props: WorkspaceProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const [viewport, setViewport] = useState<Viewport>({ panX: 0, panY: 0, scale: 1 });
+  const [cutoutDraft, setCutoutDraft] = useState<CutoutRect | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
+
+  useEffect(() => {
+    if (!props.drawingCutout) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key === "Escape") props.onCancelCutout();
+    };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, [props.drawingCutout, props.onCancelCutout]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -190,6 +203,19 @@ export function Workspace(props: WorkspaceProps) {
       return;
     }
     overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+    if (cutoutDraft !== null) {
+      overlayCtx.save();
+      overlayCtx.translate(cutoutDraft.centerX, cutoutDraft.centerY);
+      overlayCtx.rotate((cutoutDraft.rotationDeg * Math.PI) / 180);
+      overlayCtx.setLineDash([12, 8]);
+      overlayCtx.strokeStyle = "#7c3aed";
+      overlayCtx.lineWidth = Math.max(4, template.width / 120);
+      overlayCtx.strokeRect(-cutoutDraft.width / 2, -cutoutDraft.height / 2, cutoutDraft.width, cutoutDraft.height);
+      overlayCtx.restore();
+      overlay.dataset.hasCutoutDraft = "true";
+    } else {
+      delete overlay.dataset.hasCutoutDraft;
+    }
     const layer = props.selectedLayer;
     if (layer === null || !layer.visible) {
       return;
@@ -237,7 +263,7 @@ export function Workspace(props: WorkspaceProps) {
     overlayCtx.strokeStyle = "#00c4ff";
     overlayCtx.lineWidth = lineWidth;
     overlayCtx.strokeRect(rect.x, rect.y, rect.width, rect.height);
-  }, [props.document, props.assets, props.selectedLayer]);
+  }, [props.document, props.assets, props.selectedLayer, cutoutDraft]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -313,6 +339,13 @@ export function Workspace(props: WorkspaceProps) {
         return footprintGeometry(layer.transform, asset, handleBounds);
       },
       onViewportChange: setViewport,
+      drawingCutout: () => propsRef.current.drawingCutout,
+      onCutoutDraft: setCutoutDraft,
+      onCreateCutout: (rect) => propsRef.current.onCreateCutout(rect),
+      canvasSize: () => {
+        const template = getTemplate(propsRef.current.document.garmentType);
+        return { width: template.width, height: template.height };
+      },
     });
     return () => controller.destroy();
   }, []);
@@ -321,6 +354,12 @@ export function Workspace(props: WorkspaceProps) {
 
   return (
     <div class="workspace-stage" ref={stageRef} tabIndex={0}>
+      {props.drawingCutout && (
+        <div class="cutout-instruction" role="status">
+          <span>Drag where clothing should be see-through.</span>
+          <button type="button" aria-label="Cancel Cut Out" onClick={props.onCancelCutout}>Cancel</button>
+        </div>
+      )}
       {props.document.layers.length === 0 && (
         <p class="workspace-empty">Tap Add to add a picture or color.</p>
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren, JSX } from "preact";
 import { isCropValid } from "../../compositor/math";
-import type { Layer } from "../../domain/types";
+import type { CutoutRect, Layer } from "../../domain/types";
 import { EXPORT_DISCLAIMER } from "../../project/export";
 import type { TransformPatch } from "../state";
 import { GENERATE_PARENT_SETUP_MESSAGE, PALETTE, PATTERN_IDEAS } from "./text";
@@ -40,11 +40,13 @@ export function AddSheet({
   onPicture,
   onChooseColor,
   onGenerate,
+  onCutout,
   onCancel,
 }: {
   onPicture: (file: File) => void;
   onChooseColor: () => void;
   onGenerate?: () => boolean;
+  onCutout: () => void;
   onCancel: () => void;
 }) {
   const [generateBlocked, setGenerateBlocked] = useState(false);
@@ -68,6 +70,9 @@ export function AddSheet({
       </label>
       <button type="button" class="big-choice" onClick={onChooseColor}>
         <span>Choose Color</span>
+      </button>
+      <button type="button" class="big-choice" aria-label="Cut Out" onClick={onCutout}>
+        <span>Cut Out</span>
       </button>
       {onGenerate !== undefined && (
         <button
@@ -407,11 +412,29 @@ export interface MoreSheetProps {
   layer: Layer;
   onTransformCommit: (patch: TransformPatch) => void;
   onOpacityCommit: (percent: number) => void;
+  onCutoutCommit: (patch: Partial<CutoutRect>) => void;
   onClose: () => void;
 }
 
 function commitField(props: MoreSheetProps, key: FieldKey, value: number): void {
   if (props.layer.kind === "cutout") {
+    const rect = props.layer.rect;
+    switch (key) {
+      case "left": props.onCutoutCommit({ centerX: value }); break;
+      case "up": props.onCutoutCommit({ centerY: value }); break;
+      case "turn": props.onCutoutCommit({ rotationDeg: value }); break;
+      case "size": {
+        if (value > 0) {
+          const average = (rect.width + rect.height) / 2;
+          const ratio = value / average;
+          props.onCutoutCommit({ width: rect.width * ratio, height: rect.height * ratio });
+        }
+        break;
+      }
+      case "wide": if (value > 0) props.onCutoutCommit({ width: value }); break;
+      case "tall": if (value > 0) props.onCutoutCommit({ height: value }); break;
+      default: break;
+    }
     return;
   }
   const transform = props.layer.transform;
@@ -495,7 +518,9 @@ export function MoreSheet(props: MoreSheetProps) {
 
   const visibleFields = layer.kind === "solid"
     ? FIELDS.filter((field) => field.key === "see")
-    : FIELDS;
+    : layer.kind === "cutout"
+      ? FIELDS.filter((field) => field.key !== "see")
+      : FIELDS;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
