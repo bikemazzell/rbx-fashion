@@ -12,11 +12,25 @@ The first release supports rectangular cutouts only. Freehand erasing, preset ga
 
 Roblox distinguishes the three classic clothing types:
 
-- A classic T-Shirt is a square graphic on the front torso. Transparency removes part of that graphic but does not change the clothing silhouette.
-- A classic Shirt wraps the upper body and arms. Transparent areas can reveal the avatar beneath and can create effects such as a tank top.
-- Classic Pants wrap the lower torso and legs. Transparent lower areas can create effects such as shorts.
+- A classic T-Shirt is a square graphic on the front torso. If Roblox preserves its PNG alpha, transparency removes part of that graphic but cannot change the clothing silhouette.
+- A classic Shirt wraps the upper body and arms. The intended alpha behavior is to reveal the avatar beneath and allow effects such as a tank top.
+- Classic Pants wrap the lower torso and legs. The intended alpha behavior is to reveal the avatar beneath and allow effects such as shorts.
 
-The editor will preserve alpha for all three garment types and explain this distinction in concise help text. Export remains PNG because JPEG cannot preserve transparency. Roblox still recommends testing classic clothing in Studio before upload. See the official [Classic clothing documentation](https://create.roblox.com/docs/art/test-classic-clothing).
+The editor will preserve alpha for all three garment types and explain this distinction in concise help text. Export remains PNG because JPEG cannot preserve transparency. Roblox still recommends testing classic clothing in Studio before upload. See the official [Classic clothing documentation](https://create.roblox.com/docs/avatar/classic-clothing).
+
+### What Roblox currently documents
+
+The current official documentation establishes that:
+
+- classic T-Shirts are square front-torso graphics, with 512x512 given as an example;
+- classic Shirts and Pants wrap their named body regions and use the published panel sizes;
+- the official Shirt and Pants templates are 585x559 PNG files;
+- creators may export classic clothing as PNG or JPEG;
+- Studio testing is recommended because template limits can affect the result.
+
+The official template ZIP retrieved on 2026-08-30 contains 585x559, 8-bit RGBA Shirt and Pants PNGs, but every template pixel is fully opaque. Roblox's current classic-clothing page does **not** explicitly specify how the `Shirt`, `Pants`, or `ShirtGraphic` runtime handles transparent PNG pixels. Roblox's separate [PBR texture documentation](https://create.roblox.com/docs/art/modeling/surface-appearance) defines alpha 0 as transparent for `SurfaceAppearance` color maps, but that is a different rendering system and is not evidence for classic clothing.
+
+Therefore the editor's file operation is well-defined—write a rectangle with a fully alpha-zero interior into an RGBA PNG—but the avatar result remains a Studio-tested behavior, not a documentation-backed guarantee. Normal antialiasing may produce partially transparent pixels only along a rotated edge. The feature must not be described as Roblox-confirmed until the manual Shirt, Pants, and T-Shirt alpha fixtures pass in Studio.
 
 ## Child-facing interaction
 
@@ -93,7 +107,7 @@ The canonical Canvas 2D compositor remains the single rendering source.
 
 Each cutout clears its transformed rectangle from the complete canonical canvas. It is not clipped to a particular body panel; the canonical map and 3D preview remain the editing truth.
 
-The 2D workspace displays that canvas. The Three.js preview already consumes it through a transparent clothing material, so cleared pixels reveal the underlying avatar without a second rendering path. Export encodes the same canvas as an exact 512x512 T-Shirt PNG or 585x559 Shirt/Pants PNG.
+The 2D workspace displays that canvas. The Three.js preview already consumes it through a transparent clothing material, so cleared pixels reveal the underlying avatar without a second rendering path. That is the intended classic-clothing result, not a substitute for Studio confirmation. Export encodes the same canvas as an exact 512x512 T-Shirt PNG or 585x559 Shirt/Pants PNG.
 
 The existing fully-transparent export warning remains. A partially transparent result is valid and downloads normally.
 
@@ -143,7 +157,7 @@ Automated tests will cover:
 - portrait, landscape, and desktop layout stability;
 - typecheck, lint, unit, browser, build, bundle, PWA, and Chromium/Firefox/WebKit E2E gates.
 
-Roblox Studio/device calibration remains a separate manual release gate. No calibration evidence will be fabricated.
+Generate one alpha fixture per garment type with a fully clear rectangular interior and add a manual Studio check that records whether alpha-zero pixels reveal the underlying avatar, remain opaque, or behave differently. Roblox Studio/device calibration remains a separate manual release gate. No calibration evidence will be fabricated, and automated Pages deployment does not turn an unverified runtime assumption into a confirmed Roblox claim.
 
 ## Deferred
 
