@@ -283,6 +283,18 @@ test("color rectangle Size commits uniformly in pixels and undoes in one step", 
   expect(moreField(host, "Size")).toBe(180);
   expect(moreField(host, "Left/Right")).toBe(256);
   expect(moreField(host, "Up/Down")).toBe(256);
+  setMoreField(host, "Size", "180");
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  expect(moreField(host, "Size")).toBe(180);
+  expect(moreField(host, "Left/Right")).toBe(256);
+  (byLabel(host, "Done") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') === null, "more closes");
+  clickUndo(host);
+  await waitFor(() => host.querySelector(".cutout-selection-label") === null, "recommitting the displayed size leaves no undo entry");
+  (byLabel(host, "Redo") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "redo restores the color rectangle");
+  await openMore(host);
+  await waitFor(() => moreField(host, "Size") === 180, "redo restores the original size");
   setMoreField(host, "Size", "240");
   await waitFor(() => moreField(host, "Size") === 240, "uniform size commit");
   expect(moreField(host, "Left/Right")).toBe(256);

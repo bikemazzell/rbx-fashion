@@ -431,7 +431,7 @@ function commitField(props: MoreSheetProps, key: FieldKey, value: number): void 
       case "turn": props.onCutoutCommit({ rotationDeg: value }); break;
       case "size": {
         if (value > 0) {
-          const average = (rect.width + rect.height) / 2;
+          const average = Math.max(1, Math.round((rect.width + rect.height) / 2));
           const ratio = value / average;
           props.onCutoutCommit({ width: rect.width * ratio, height: rect.height * ratio });
         }
@@ -457,7 +457,7 @@ function commitField(props: MoreSheetProps, key: FieldKey, value: number): void 
     case "size":
       if (value > 0) {
         if (props.layer.kind === "solid") {
-          const average = (transform.scaleX + transform.scaleY) / 2;
+          const average = Math.max(1, Math.round((transform.scaleX + transform.scaleY) / 2));
           const ratio = value / average;
           props.onTransformCommit({ scaleX: transform.scaleX * ratio, scaleY: transform.scaleY * ratio });
         } else {
@@ -548,21 +548,24 @@ export function MoreSheet(props: MoreSheetProps) {
     <SheetBackdrop label="More" onDismiss={props.onClose} sheetClass="more-sheet">
       <h2 class="sheet-title">More</h2>
       <form class="more-form" ref={formRef} onSubmit={(event) => event.preventDefault()}>
-        {visibleFields.map((field) => (
-          <label key={field.key} class="field">
-            <span class="field-label">{field.label}</span>
-            <input
-              type="number"
-              data-field={field.key}
-              aria-label={field.label}
-              min={field.min}
-              max={field.max}
-              step={field.step}
-              defaultValue={fieldValue(layer, field.key)}
-              onChange={onCommit(field.key)}
-            />
-          </label>
-        ))}
+        {visibleFields.map((field) => {
+          const pixelSize = field.key === "size" && layer.kind !== "raster";
+          return (
+            <label key={field.key} class="field">
+              <span class="field-label">{field.label}</span>
+              <input
+                type="number"
+                data-field={field.key}
+                aria-label={field.label}
+                min={pixelSize ? 0.01 : field.min}
+                max={field.max}
+                step={pixelSize ? 0.5 : field.step}
+                defaultValue={fieldValue(layer, field.key)}
+                onChange={onCommit(field.key)}
+              />
+            </label>
+          );
+        })}
         {layer.kind === "raster" && (
           <>
             <h3 class="field-group">Crop</h3>
