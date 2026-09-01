@@ -277,7 +277,9 @@ test("open rejects unknown schemas, unknown shapes, and strict v3 cutout hybrids
   );
   const firstLayer = base.layers[0];
   if (firstLayer === undefined) throw new Error("missing strict cutout fixture");
-  const { shape: _shape, ...missingShape } = firstLayer;
+  const missingShape = Object.fromEntries(
+    Object.entries(firstLayer).filter(([key]) => key !== "shape"),
+  );
   expectInvalid(await openProject(fileOf(assetFreeZip({ ...base, layers: [missingShape] }))));
   expectInvalid(
     await openProject(

@@ -1,4 +1,4 @@
-import type { CutoutRect, Layer, Transform } from "../../domain/types";
+import type { CutoutRect, CutoutShape, Layer, Transform } from "../../domain/types";
 import type { EditorAction, EditorSession, TransformPatch } from "../state";
 
 export interface Viewport {
@@ -89,7 +89,11 @@ export function footprintGeometry(
   };
 }
 
-function pointInFootprint(footprint: FootprintGeometry, point: Point): boolean {
+export function pointInFootprint(
+  footprint: FootprintGeometry,
+  point: Point,
+  shape: CutoutShape = "rectangle",
+): boolean {
   const rad = (-footprint.rotationDeg * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
@@ -98,6 +102,11 @@ function pointInFootprint(footprint: FootprintGeometry, point: Point): boolean {
   const rotatedX = dx * cos - dy * sin;
   const rotatedY = dx * sin + dy * cos;
   const epsilon = 1e-6;
+  if (shape === "ellipse") {
+    const normalizedX = rotatedX / footprint.halfWidth;
+    const normalizedY = rotatedY / footprint.halfHeight;
+    return normalizedX * normalizedX + normalizedY * normalizedY <= 1 + epsilon;
+  }
   return (
     Math.abs(rotatedX) <= footprint.halfWidth + epsilon &&
     Math.abs(rotatedY) <= footprint.halfHeight + epsilon
@@ -223,8 +232,9 @@ export interface GestureControllerOptions {
   itemFootprint: (id: string) => FootprintGeometry | null;
   onViewportChange: (viewport: Viewport) => void;
   drawingCutout?: () => boolean;
-  onCutoutDraft?: (rect: CutoutRect | null) => void;
-  onCreateCutout?: (rect: CutoutRect) => void;
+  cutoutShape?: () => CutoutShape | null;
+  onCutoutDraft?: (rect: CutoutRect | null, shape: CutoutShape | null) => void;
+  onCreateCutout?: (rect: CutoutRect, shape: CutoutShape) => void;
   canvasSize?: () => { width: number; height: number };
 }
 
@@ -240,7 +250,14 @@ export function createGestureController(options: GestureControllerOptions): { de
   let scheduledFrame: number | null = null;
   let wheelGestureActive = false;
   let wheelCommitTimer: number | null = null;
-  let cutoutDraw: { pointerId: number; start: Point; current: Point; downX: number; downY: number } | null = null;
+  let cutoutDraw: {
+    pointerId: number;
+    start: Point;
+    current: Point;
+    downX: number;
+    downY: number;
+    shape: CutoutShape;
+  } | null = null;
 
   const fitCenter = (): Point => {
     const rect = options.canvasRect();
@@ -264,11 +281,16 @@ export function createGestureController(options: GestureControllerOptions): { de
     return HANDLE_SCREEN_RADIUS / (rect.scale * viewport.scale);
   };
 
-  const cutoutRect = (start: Point, end: Point, tap: boolean): CutoutRect => {
+  const cutoutRect = (start: Point, end: Point, tap: boolean, shape: CutoutShape): CutoutRect => {
     const size = options.canvasSize?.() ?? { width: 512, height: 512 };
     if (tap) {
-      const width = Math.max(32, size.width * 0.25);
-      const height = Math.max(32, size.height * 0.2);
+      let width = Math.max(32, size.width * 0.25);
+      let height = Math.max(32, size.height * 0.2);
+      if (shape === "ellipse") {
+        const diameter = Math.min(width, height);
+        width = diameter;
+        height = diameter;
+      }
       return {
         centerX: Math.min(size.width - width / 2, Math.max(width / 2, start.x)),
         centerY: Math.min(size.height - height / 2, Math.max(height / 2, start.y)),
@@ -300,7 +322,8 @@ export function createGestureController(options: GestureControllerOptions): { de
         continue;
       }
       const footprint = options.itemFootprint(layer.id);
-      if (footprint !== null && pointInFootprint(footprint, point)) {
+      const shape = layer.kind === "cutout" ? layer.shape : "rectangle";
+      if (footprint !== null && pointInFootprint(footprint, point, shape)) {
         return layer.id;
       }
     }
@@ -636,6 +659,7 @@ export function createGestureController(options: GestureControllerOptions): { de
   const onPointerDown = (event: PointerEvent): void => {
     if (options.drawingCutout?.()) {
       if (cutoutDraw !== null) return;
+      const shape = options.cutoutShape?.() ?? "rectangle";
       const point = screenToCanvas(event.clientX, event.clientY);
       cutoutDraw = {
         pointerId: event.pointerId,
@@ -643,12 +667,13 @@ export function createGestureController(options: GestureControllerOptions): { de
         current: point,
         downX: event.clientX,
         downY: event.clientY,
+        shape,
       };
       try {
         overlay.setPointerCapture(event.pointerId);
       } catch {
       }
-      options.onCutoutDraft?.(cutoutRect(point, point, true));
+      options.onCutoutDraft?.(cutoutRect(point, point, true, shape), shape);
       return;
     }
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -666,14 +691,17 @@ export function createGestureController(options: GestureControllerOptions): { de
   const onPointerMove = (event: PointerEvent): void => {
     if (cutoutDraw !== null) {
       if (cutoutDraw.pointerId !== event.pointerId) return;
-      if (!options.drawingCutout?.()) {
+      if (!options.drawingCutout?.() || options.cutoutShape?.() !== cutoutDraw.shape) {
         cutoutDraw = null;
-        options.onCutoutDraft?.(null);
+        options.onCutoutDraft?.(null, null);
         return;
       }
       cutoutDraw.current = screenToCanvas(event.clientX, event.clientY);
       const tap = Math.hypot(event.clientX - cutoutDraw.downX, event.clientY - cutoutDraw.downY) < TAP_MAX_DISTANCE;
-      options.onCutoutDraft?.(cutoutRect(cutoutDraw.start, cutoutDraw.current, tap));
+      options.onCutoutDraft?.(
+        cutoutRect(cutoutDraw.start, cutoutDraw.current, tap, cutoutDraw.shape),
+        cutoutDraw.shape,
+      );
       return;
     }
     if (!pointers.has(event.pointerId)) {
@@ -692,16 +720,22 @@ export function createGestureController(options: GestureControllerOptions): { de
   const onPointerUp = (event: PointerEvent): void => {
     if (cutoutDraw !== null) {
       if (cutoutDraw.pointerId !== event.pointerId) return;
-      if (!options.drawingCutout?.()) {
+      if (!options.drawingCutout?.() || options.cutoutShape?.() !== cutoutDraw.shape) {
         cutoutDraw = null;
-        options.onCutoutDraft?.(null);
+        options.onCutoutDraft?.(null, null);
         return;
       }
       const tap = Math.hypot(event.clientX - cutoutDraw.downX, event.clientY - cutoutDraw.downY) < TAP_MAX_DISTANCE;
-      const rect = cutoutRect(cutoutDraw.start, screenToCanvas(event.clientX, event.clientY), tap);
+      const shape = cutoutDraw.shape;
+      const rect = cutoutRect(
+        cutoutDraw.start,
+        screenToCanvas(event.clientX, event.clientY),
+        tap,
+        shape,
+      );
       cutoutDraw = null;
-      options.onCutoutDraft?.(null);
-      options.onCreateCutout?.(rect);
+      options.onCutoutDraft?.(null, null);
+      options.onCreateCutout?.(rect, shape);
       return;
     }
     pointers.delete(event.pointerId);
@@ -728,7 +762,7 @@ export function createGestureController(options: GestureControllerOptions): { de
   const onPointerCancel = (event: PointerEvent): void => {
     if (cutoutDraw !== null && cutoutDraw.pointerId === event.pointerId) {
       cutoutDraw = null;
-      options.onCutoutDraft?.(null);
+      options.onCutoutDraft?.(null, null);
       return;
     }
     if (itemGesture !== null && itemGesture.pointerId === event.pointerId) {
@@ -777,7 +811,8 @@ export function createGestureController(options: GestureControllerOptions): { de
     const footprint = options.itemFootprint(id);
     if (footprint === null) return;
     const point = screenToCanvas(event.clientX, event.clientY);
-    if (!pointInFootprint(footprint, point)) return;
+    const shape = layer.kind === "cutout" ? layer.shape : "rectangle";
+    if (!pointInFootprint(footprint, point, shape)) return;
     const delta = normalizedWheelDelta(event, Math.max(1, overlay.offsetHeight));
     if (delta === 0) return;
 
@@ -884,7 +919,7 @@ export function createGestureController(options: GestureControllerOptions): { de
       }
       pendingUpdate = null;
       cutoutDraw = null;
-      options.onCutoutDraft?.(null);
+      options.onCutoutDraft?.(null, null);
       if (scheduledFrame !== null) {
         cancelAnimationFrame(scheduledFrame);
         scheduledFrame = null;

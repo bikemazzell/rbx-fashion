@@ -1,6 +1,6 @@
 import type { Ref } from "preact";
 import type { AssetStore } from "../../assets/store";
-import type { CutoutRect, Layer, PlacementMode, ProjectDocument } from "../../domain/types";
+import type { CutoutRect, CutoutShape, Layer, PlacementMode, ProjectDocument } from "../../domain/types";
 import type { EditorAction, EditorSession, TransformPatch } from "../state";
 import {
   IconAdd,
@@ -17,6 +17,7 @@ import { PreviewPane } from "./preview-pane";
 import {
   AddSheet,
   ColorSheet,
+  CutoutShapeSheet,
   DisclaimerSheet,
   GenerateSheet,
   MoreSheet,
@@ -34,7 +35,7 @@ const PLACEMENTS: readonly { label: string; value: PlacementMode }[] = [
 
 type TabKind = "edit" | "preview";
 type ToolKind = "add" | "move" | "repeat" | "color" | "preview" | "export";
-type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer" | "generate";
+type SheetKind = null | "add" | "color" | "cutout-shape" | "items" | "more" | "question" | "disclaimer" | "generate";
 
 export interface EditorScreenProps {
   session: EditorSession;
@@ -54,7 +55,7 @@ export interface EditorScreenProps {
   redoRef: Ref<HTMLButtonElement>;
   undoDisabled: boolean;
   redoDisabled: boolean;
-  drawingCutout: boolean;
+  drawingCutoutShape: CutoutShape | null;
   onNew: () => void;
   onSave: () => void;
   onOpen: () => void;
@@ -75,8 +76,9 @@ export interface EditorScreenProps {
   onTransformCommit: (patch: TransformPatch) => void;
   onOpacityCommit: (percent: number) => void;
   onCutoutCommit: (patch: Partial<CutoutRect>) => void;
-  onStartCutout: () => void;
-  onCreateCutout: (rect: CutoutRect) => void;
+  onChooseCutoutShape: () => void;
+  onStartCutout: (shape: CutoutShape) => void;
+  onCreateCutout: (rect: CutoutRect, shape: CutoutShape) => void;
   onCancelCutout: () => void;
   onFile: (file: File) => void;
   onSwatch: (color: string) => void;
@@ -175,7 +177,9 @@ export function EditorScreen(props: EditorScreenProps) {
             {selected !== null && (
               <div class="selection-bar">
                 {selected.kind === "cutout" ? (
-                  <strong class="cutout-selection-label">Cut Out</strong>
+                  <strong class="cutout-selection-label">
+                    {selected.shape === "ellipse" ? "Oval Cut Out" : "Rectangle Cut Out"}
+                  </strong>
                 ) : selected.kind === "solid" && selected.placement === "decal" ? (
                   <strong class="cutout-selection-label">Color</strong>
                 ) : <div class="segmented" role="group" aria-label="Placement">
@@ -211,7 +215,7 @@ export function EditorScreen(props: EditorScreenProps) {
               getSession={props.getSession}
               dispatch={props.dispatch}
               onSelect={props.onSelect}
-              drawingCutout={props.drawingCutout}
+              drawingCutoutShape={props.drawingCutoutShape}
               onCreateCutout={props.onCreateCutout}
               onCancelCutout={props.onCancelCutout}
             />
@@ -294,9 +298,12 @@ export function EditorScreen(props: EditorScreenProps) {
           onPicture={props.onFile}
           onChooseColor={() => props.onToolbar("color")}
           onGenerate={props.generateEnabled ? props.onGenerateFromAdd : undefined}
-          onCutout={props.onStartCutout}
+          onCutout={props.onChooseCutoutShape}
           onCancel={props.onCloseSheet}
         />
+      )}
+      {props.sheet === "cutout-shape" && (
+        <CutoutShapeSheet onChoose={props.onStartCutout} onCancel={props.onCloseSheet} />
       )}
       {props.sheet === "generate" && (
         <GenerateSheet onGenerate={props.onGeneratePattern} onClose={props.onCloseSheet} />

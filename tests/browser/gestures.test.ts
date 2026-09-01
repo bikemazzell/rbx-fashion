@@ -3,6 +3,7 @@ import { mountDesignerApp, unmountDesignerApp } from "../../src/editor/ui/mount"
 import {
   createGestureController,
   footprintGeometry,
+  pointInFootprint,
 } from "../../src/editor/ui/gestures";
 import { createSession } from "../../src/editor/state";
 import type { EditorAction, EditorSession } from "../../src/editor/state";
@@ -38,6 +39,25 @@ afterEach(() => {
   unmountHosts();
 });
 
+test("ellipse footprint hit testing excludes empty bounding corners and follows rotation", () => {
+  const crop = { x: 0, y: 0, width: 1, height: 1 };
+  const axisAligned = footprintGeometry(
+    { positionX: 100, positionY: 100, rotationDeg: 0, scaleX: 100, scaleY: 50, crop },
+    { width: 1, height: 1 },
+  );
+  expect(pointInFootprint(axisAligned, { x: 100, y: 100 }, "ellipse")).toBe(true);
+  expect(pointInFootprint(axisAligned, { x: 148, y: 100 }, "ellipse")).toBe(true);
+  expect(pointInFootprint(axisAligned, { x: 148, y: 123 }, "ellipse")).toBe(false);
+  expect(pointInFootprint(axisAligned, { x: 148, y: 123 }, "rectangle")).toBe(true);
+
+  const rotated = footprintGeometry(
+    { positionX: 100, positionY: 100, rotationDeg: 90, scaleX: 100, scaleY: 50, crop },
+    { width: 1, height: 1 },
+  );
+  expect(pointInFootprint(rotated, { x: 100, y: 148 }, "ellipse")).toBe(true);
+  expect(pointInFootprint(rotated, { x: 123, y: 148 }, "ellipse")).toBe(false);
+});
+
 async function waitFor(condition: () => boolean, what: string, timeout = 4000): Promise<void> {
   const start = performance.now();
   while (!condition()) {
@@ -50,6 +70,16 @@ async function waitFor(condition: () => boolean, what: string, timeout = 4000): 
 
 function byLabel(host: HTMLElement, label: string): HTMLElement {
   return requireEl(host.querySelector(`[aria-label="${label}"]`), `aria-label ${label}`);
+}
+
+async function chooseCutoutShape(host: HTMLElement, shape: "Rectangle" | "Oval"): Promise<void> {
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') !== null,
+    "cutout shape sheet",
+  );
+  (byLabel(host, shape) as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, `${shape} draw mode`);
 }
 
 async function startEditing(host: HTMLElement, garment: string): Promise<void> {
@@ -239,8 +269,7 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   await startEditing(host, "Shirt");
   (byLabel(host, "Add") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "cutout instructions");
+  await chooseCutoutShape(host, "Rectangle");
 
   const start = canvasToScreen(host, 120, 100);
   const end = canvasToScreen(host, 360, 280);
@@ -252,7 +281,7 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   );
   pointer(host, "pointerup", 1, end.x, end.y);
   await waitFor(() => host.querySelector(".cutout-instruction") === null, "drawing completes");
-  expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Cut Out");
+  expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Rectangle Cut Out");
   await openMore(host);
   expect(moreField(host, "Size")).toBe(210);
   expect(moreField(host, "Left/Right")).toBe(240);
@@ -263,8 +292,7 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
 
   (byLabel(host, "Add") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet again");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "tap cutout instructions");
+  await chooseCutoutShape(host, "Rectangle");
   const tap = canvasToScreen(host, 450, 400);
   pointer(host, "pointerdown", 1, tap.x, tap.y);
   pointer(host, "pointerup", 1, tap.x, tap.y);
@@ -273,6 +301,42 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   expect(moreField(host, "Size")).toBeGreaterThan(20);
   expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Wide"]')).toBeNull();
   expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Tall"]')).toBeNull();
+}, 10000);
+
+test("Oval Cut Out draws an ellipse, preserves its painted corners, and names the item clearly", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await addColor(host, 0);
+  await openMore(host);
+  setMoreField(host, "Up/Down", "138");
+  (byLabel(host, "Done") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') === null, "color More closes");
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await chooseCutoutShape(host, "Oval");
+
+  const start = canvasToScreen(host, 250, 100);
+  const end = canvasToScreen(host, 340, 180);
+  pointer(host, "pointerdown", 1, start.x, start.y);
+  pointer(host, "pointermove", 1, end.x, end.y);
+  await waitFor(
+    () => host.querySelector(".workspace-overlay")?.getAttribute("data-draft-shape") === "ellipse",
+    "ellipse draft",
+  );
+  pointer(host, "pointerup", 1, end.x, end.y);
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "oval completes");
+  expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Oval Cut Out");
+  await waitFor(
+    () => host.querySelector(".workspace-overlay")?.getAttribute("data-selection-shape") === "ellipse",
+    "ellipse selection outline",
+  );
+  const alphaAt = (x: number, y: number) => {
+    const ctx = canvasEl(host).getContext("2d");
+    if (ctx === null) throw new Error("workspace canvas context is missing");
+    return ctx.getImageData(x, y, 1, 1).data[3];
+  };
+  await waitFor(() => alphaAt(295, 140) === 0, "oval clears its center");
+  expect(alphaAt(255, 105)).toBe(255);
 }, 10000);
 
 test("color rectangle Size commits uniformly in pixels and undoes in one step", async () => {
@@ -311,8 +375,7 @@ test("Escape during an active cutout drag discards it even after pointer-up", as
   await startEditing(host, "Shirt");
   (byLabel(host, "Add") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  await chooseCutoutShape(host, "Rectangle");
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   const start = canvasToScreen(host, 100, 100);
   const end = canvasToScreen(host, 300, 300);
@@ -332,8 +395,7 @@ test("wheel and keyboard transforms are ignored while drawing a cutout", async (
   await importSticker(host);
   (byLabel(host, "Add") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  await chooseCutoutShape(host, "Rectangle");
   const center = canvasToScreen(host, 256, 256);
   overlayEl(host).dispatchEvent(new WheelEvent("wheel", { deltaY: -100, clientX: center.x, clientY: center.y, cancelable: true, bubbles: true }));
   stageEl(host).dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true, cancelable: true }));
@@ -710,8 +772,7 @@ test("cutouts show side handles on the selection overlay", async () => {
   await startEditing(host, "Shirt");
   (byLabel(host, "Add") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  await chooseCutoutShape(host, "Rectangle");
   const start = canvasToScreen(host, 120, 100);
   const end = canvasToScreen(host, 360, 280);
   pointer(host, "pointerdown", 1, start.x, start.y);
@@ -888,10 +949,15 @@ interface Harness {
   overlay: HTMLCanvasElement;
   actions: string[];
   mutations: { op: string; patch: Record<string, number> }[];
+  selections: (string | null)[];
   destroy: () => void;
 }
 
-function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationDeg = 0): Harness {
+function createHarness(
+  kind: "raster" | "cutout" | "solid" = "raster",
+  rotationDeg = 0,
+  cutoutShape: "rectangle" | "ellipse" = "rectangle",
+): Harness {
   const host = document.createElement("div");
   host.style.cssText = "position:relative;width:600px;height:600px;";
   document.body.appendChild(host);
@@ -903,6 +969,7 @@ function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationD
   host.appendChild(overlay);
   const actions: string[] = [];
   const mutations: { op: string; patch: Record<string, number> }[] = [];
+  const selections: (string | null)[] = [];
   const crop = { x: 0, y: 0, width: 1, height: 1 };
   const footprintSource =
     kind === "raster"
@@ -942,8 +1009,8 @@ function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationD
             ? {
                 id: "item-1",
                 name: "Cut Out 1",
-          kind: "cutout",
-          shape: "rectangle",
+                kind: "cutout",
+                shape: cutoutShape,
                 visible: true,
                 rect: { centerX: 256, centerY: 256, width: 400, height: 300, rotationDeg },
               }
@@ -981,7 +1048,7 @@ function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationD
       }
       session = harnessReduce(session, action);
     },
-    onSelect: () => {},
+    onSelect: (id) => selections.push(id),
     selectedId: () => "item-1",
     itemFootprint: () => footprintSource,
     onViewportChange: () => {},
@@ -990,6 +1057,7 @@ function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationD
     overlay,
     actions,
     mutations,
+    selections,
     destroy: () => {
       controller.destroy();
       host.remove();
@@ -1026,6 +1094,27 @@ test("cutout move, scale, rotate, and wheel gestures use cutout mutations", asyn
       }),
     );
     expect(harness.actions).toContain("patch-cutout");
+  } finally {
+    harness.destroy();
+  }
+}, 10000);
+
+test("ellipse cutouts ignore empty bounding-box corners while keeping their handles draggable", async () => {
+  const harness = createHarness("cutout", 0, "ellipse");
+  try {
+    harnessPointer(harness, "pointerdown", 1, 420, 370);
+    harnessPointer(harness, "pointerup", 1, 420, 370);
+    expect(harness.actions).not.toContain("begin-gesture");
+    expect(harness.selections.at(-1)).toBeNull();
+
+    harness.actions.length = 0;
+    harness.mutations.length = 0;
+    harnessPointer(harness, "pointerdown", 2, 456, 256);
+    harnessPointer(harness, "pointermove", 2, 496, 256);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    harnessPointer(harness, "pointerup", 2, 496, 256);
+    expect(harness.actions).toEqual(["begin-gesture", "patch-cutout", "commit-gesture"]);
+    expect(harness.mutations[0]?.patch).toMatchObject({ width: 440, centerX: 276 });
   } finally {
     harness.destroy();
   }

@@ -13,6 +13,7 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
   await expect(page.getByRole("navigation", { name: "Tools" })).toBeVisible();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Cut Out", exact: true }).click();
+  await page.getByRole("button", { name: "Oval", exact: true }).click();
   const overlay = page.locator(".workspace-overlay");
   const box = await overlay.boundingBox();
   if (box === null) throw new Error("workspace overlay is missing");
@@ -21,7 +22,8 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
   await overlay.dispatchEvent("pointerdown", { pointerId: 1, pointerType: "touch", ...start });
   await overlay.dispatchEvent("pointermove", { pointerId: 1, pointerType: "touch", ...end });
   await overlay.dispatchEvent("pointerup", { pointerId: 1, pointerType: "touch", ...end });
-  await expect(page.locator(".cutout-selection-label")).toHaveText("Cut Out");
+  await expect(page.locator(".cutout-selection-label")).toHaveText("Oval Cut Out");
+  await expect(overlay).toHaveAttribute("data-selection-shape", "ellipse");
 
   const layout = await page.evaluate(() => {
     const rect = (selector: string) => {
@@ -45,6 +47,62 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
   expect(layout.documentHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(layout.bodyHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(pageErrors.filter((message) => message.includes("ResizeObserver loop"))).toEqual([]);
+});
+
+test("compact color and cutout More sheets do not create nested scrolling in phone landscape", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Shirt", exact: true }).click();
+
+  const expectCompactMoreFits = async () => {
+    const metrics = await page.locator('[role="dialog"][aria-label="More"]').evaluate((sheet) => {
+      const form = sheet.querySelector<HTMLElement>(".more-form");
+      if (form === null) throw new Error("More form is missing");
+      return {
+        sheetClientHeight: sheet.clientHeight,
+        sheetScrollHeight: sheet.scrollHeight,
+        formClientHeight: form.clientHeight,
+        formScrollHeight: form.scrollHeight,
+        formOverflowY: getComputedStyle(form).overflowY,
+      };
+    });
+    expect(metrics.sheetScrollHeight).toBeLessThanOrEqual(metrics.sheetClientHeight);
+    expect(metrics.formScrollHeight).toBeLessThanOrEqual(metrics.formClientHeight);
+    expect(metrics.formOverflowY).not.toMatch(/auto|scroll/);
+  };
+
+  await page.getByRole("button", { name: "Color", exact: true }).click();
+  await page.getByRole("button", { name: "Red", exact: true }).click();
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await expectCompactMoreFits();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Cut Out", exact: true }).click();
+  await page.getByRole("button", { name: "Rectangle", exact: true }).click();
+  const overlay = page.locator(".workspace-overlay");
+  const box = await overlay.boundingBox();
+  if (box === null) throw new Error("workspace overlay is missing");
+  await overlay.dispatchEvent("pointerdown", {
+    pointerId: 2,
+    pointerType: "touch",
+    clientX: box.x + box.width * 0.3,
+    clientY: box.y + box.height * 0.3,
+  });
+  await overlay.dispatchEvent("pointermove", {
+    pointerId: 2,
+    pointerType: "touch",
+    clientX: box.x + box.width * 0.7,
+    clientY: box.y + box.height * 0.7,
+  });
+  await overlay.dispatchEvent("pointerup", {
+    pointerId: 2,
+    pointerType: "touch",
+    clientX: box.x + box.width * 0.7,
+    clientY: box.y + box.height * 0.7,
+  });
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await expectCompactMoreFits();
 });
 
 test("phone portrait keeps the 2D and 3D stages bounded while switching views", async ({ page }) => {

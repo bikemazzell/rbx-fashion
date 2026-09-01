@@ -7,7 +7,7 @@ Build a small, mobile-first website that lets an 8–10-year-old create Roblox c
 The child-facing workflow is:
 
 1. Pick T-shirt, Shirt, or Pants.
-2. Add a picture, choose a color, draw a rectangular Cut Out, or—when a parent has enabled it—generate a simple AI pattern.
+2. Add a picture, choose a color, draw a rectangular or oval Cut Out, or—when a parent has enabled it—generate a simple AI pattern.
 3. For pictures, choose Sticker, Repeat, or Fill Clothing. Choosing a color instead creates an editable color rectangle.
 4. Drag, resize, rotate, crop, and adjust the result while seeing it on the 2D template. Color rectangles and Cut Outs stretch a single side by dragging its side handle.
 5. Check it on one simple block-avatar preview and download a Roblox-ready PNG.
@@ -136,7 +136,7 @@ interface Transform {
   crop: { x: number; y: number; width: number; height: number };
 }
 
-interface Layer {
+interface PaintLayer {
   id: string;
   name: string;
   kind: "solid" | "raster";
@@ -147,6 +147,17 @@ interface Layer {
   placement: PlacementMode;
   transform: Transform;
 }
+
+interface CutoutLayer {
+  id: string;
+  name: string;
+  kind: "cutout";
+  shape: "rectangle" | "ellipse";
+  visible: boolean;
+  rect: { centerX: number; centerY: number; width: number; height: number; rotationDeg: number };
+}
+
+type Layer = PaintLayer | CutoutLayer;
 
 interface AssetManifestEntry {
   id: string;
@@ -163,7 +174,7 @@ interface AssetManifestEntry {
 
 interface ProjectDocument {
   format: "rbx-fashion-project";
-  schemaVersion: 2;
+  schemaVersion: 3;
   name: string;
   garmentType: GarmentType;
   layers: Layer[];
@@ -171,7 +182,7 @@ interface ProjectDocument {
 }
 ```
 
-Version 2 adds `CutoutLayer`, which stores only an ID, name, visibility, and finite positive rectangle geometry. Paint layers always precede the cutout suffix so visible cutouts erase the finished composition regardless of artwork order. Valid version-1 projects migrate to version 2 in memory when opened; new saves always use version 2.
+Version 2 added rectangular Cut Outs. Version 3 adds the required Cut Out `shape` discriminator. Valid version-1 projects migrate directly to version 3; valid version-2 Cut Outs migrate as rectangles without changing their names or geometry. New saves always use version 3. Paint layers always precede the cutout suffix so visible Cut Outs erase the finished composition regardless of artwork order.
 
 Garment type is fixed for an open project. Changing garment creates a new project; existing layers are never silently reinterpreted.
 

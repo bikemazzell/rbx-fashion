@@ -534,6 +534,16 @@ button {
   cursor: pointer;
 }
 
+.shape-choice {
+  justify-content: flex-start;
+}
+
+.shape-choice svg {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
 .big-choice input[type="file"] {
   max-width: 55%;
   font-size: 0.75rem;
@@ -699,6 +709,22 @@ button {
 
 .more-sheet .field input {
   width: 100%;
+}
+
+.compact-more-sheet .more-form {
+  flex: 0 0 auto;
+  overflow-y: visible;
+}
+
+.compact-more-sheet .field {
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+}
+
+.compact-more-sheet .field input {
+  min-width: 0;
+  width: 5rem;
 }
 
 .more-sheet-done {

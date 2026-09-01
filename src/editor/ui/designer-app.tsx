@@ -9,6 +9,7 @@ import { LIMITS } from "../../domain/types";
 import type {
   AssetManifestEntry,
   CutoutRect,
+  CutoutShape,
   GarmentType,
   PlacementMode,
   TemplateRegistryEntry,
@@ -31,7 +32,7 @@ import {
   composeFailureMessage,
 } from "./text";
 
-type SheetKind = null | "add" | "color" | "items" | "more" | "question" | "disclaimer" | "generate";
+type SheetKind = null | "add" | "color" | "cutout-shape" | "items" | "more" | "question" | "disclaimer" | "generate";
 
 interface PendingRaster {
   assetId: string;
@@ -114,7 +115,7 @@ export function DesignerApp() {
   const [session, setSession] = useState<EditorSession | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
-  const [drawingCutout, setDrawingCutout] = useState(false);
+  const [drawingCutoutShape, setDrawingCutoutShape] = useState<CutoutShape | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [pendingStart, setPendingStart] = useState<PendingStart | null>(null);
   const [pendingRaster, setPendingRaster] = useState<PendingRaster | null>(null);
@@ -232,7 +233,7 @@ export function DesignerApp() {
     setComposeError(null);
     setTransparentWarning(null);
     setActiveTab("edit");
-    setDrawingCutout(false);
+    setDrawingCutoutShape(null);
   };
 
   const startGarment = (garment: GarmentType) => {
@@ -587,7 +588,7 @@ export function DesignerApp() {
   };
 
   const onToolbar = (tool: "add" | "move" | "repeat" | "color" | "preview" | "export") => {
-    setDrawingCutout(false);
+    setDrawingCutoutShape(null);
     if (tool === "add") {
       setSheet("add");
     } else if (tool === "move") {
@@ -755,7 +756,7 @@ export function DesignerApp() {
     apply({ type: "set-opacity", id: selectedLayer.id, opacity: clamped / 100 });
   };
 
-  const onStartCutout = () => {
+  const onChooseCutoutShape = () => {
     const current = sessionRef.current;
     if (current === null) return;
     if (current.document.layers.length >= LIMITS.MAX_LAYERS) {
@@ -763,24 +764,32 @@ export function DesignerApp() {
       setNotice(ITEM_CAP_MESSAGE);
       return;
     }
-    setSheet(null);
-    setActiveTab("edit");
-    setDrawingCutout(true);
+    setSheet("cutout-shape");
   };
 
-  const onCreateCutout = (rect: CutoutRect) => {
+  const onStartCutout = (shape: CutoutShape) => {
+    setSheet(null);
+    setActiveTab("edit");
+    setDrawingCutoutShape(shape);
+  };
+
+  const onCreateCutout = (rect: CutoutRect, shape: CutoutShape) => {
     const current = sessionRef.current;
-    if (current === null || current.document.layers.length >= LIMITS.MAX_LAYERS) {
-      setDrawingCutout(false);
+    if (current === null || drawingCutoutShape !== shape) {
+      setDrawingCutoutShape(null);
+      return;
+    }
+    if (current.document.layers.length >= LIMITS.MAX_LAYERS) {
+      setDrawingCutoutShape(null);
       setNotice(ITEM_CAP_MESSAGE);
       return;
     }
     const next = dispatch(current, {
       type: "add-item",
-      item: { kind: "cutout", shape: "rectangle", rect },
+      item: { kind: "cutout", shape, rect },
     });
     if (commitIfChanged(current, next)) setSelectedItemId(topLayerId(next));
-    setDrawingCutout(false);
+    setDrawingCutoutShape(null);
   };
 
   const onCutoutCommit = (patch: Partial<CutoutRect>) => {
@@ -836,14 +845,14 @@ export function DesignerApp() {
         redoRef={redoRef}
         undoDisabled={undoDisabled}
         redoDisabled={redoDisabled}
-        drawingCutout={drawingCutout}
+        drawingCutoutShape={drawingCutoutShape}
         onNew={onNew}
         onSave={() => void onSave()}
         onOpen={requestOpen}
         onUndo={() => apply({ type: "undo" })}
         onRedo={() => apply({ type: "redo" })}
         onTabChange={(tab) => {
-          setDrawingCutout(false);
+          setDrawingCutoutShape(null);
           setActiveTab(tab);
         }}
         onToolbar={onToolbar}
@@ -860,9 +869,10 @@ export function DesignerApp() {
         onTransformCommit={onTransformCommit}
         onOpacityCommit={onOpacityCommit}
         onCutoutCommit={onCutoutCommit}
+        onChooseCutoutShape={onChooseCutoutShape}
         onStartCutout={onStartCutout}
         onCreateCutout={onCreateCutout}
-        onCancelCutout={() => setDrawingCutout(false)}
+        onCancelCutout={() => setDrawingCutoutShape(null)}
         onFile={handleFile}
         onSwatch={onSwatch}
         generateEnabled={generateEnabled}

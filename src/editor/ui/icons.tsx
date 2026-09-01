@@ -84,3 +84,21 @@ export function IconDown(): JSX.Element {
 export function IconTrash(): JSX.Element {
   return strokeIcon(["M4 7h16", "M9 7V4h6v3", "M6 7l1 13h10l1-13", "M10 11v5", "M14 11v5"]);
 }
+
+export function IconRectangle(): JSX.Element {
+  return strokeIcon(["M4 6h16v12H4z"]);
+}
+
+export function IconOval(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      aria-hidden="true"
+    >
+      <ellipse cx="12" cy="12" rx="9" ry="6" />
+    </svg>
+  );
+}

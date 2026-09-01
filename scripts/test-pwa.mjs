@@ -196,6 +196,7 @@ async function run() {
       await page.getByRole("button", { name: "Red", exact: true }).click();
       await page.getByRole("button", { name: "Add", exact: true }).click();
       await page.getByRole("button", { name: "Cut Out", exact: true }).click();
+      await page.getByRole("button", { name: "Oval", exact: true }).click();
       const overlay = page.locator(".workspace-overlay");
       const box = await overlay.boundingBox();
       if (box === null) throw new Error("workspace overlay is unavailable");

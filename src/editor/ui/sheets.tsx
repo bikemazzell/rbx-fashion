@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren, JSX } from "preact";
 import { isCropValid } from "../../compositor/math";
-import type { CutoutRect, Layer } from "../../domain/types";
+import type { CutoutRect, CutoutShape, Layer } from "../../domain/types";
 import { EXPORT_DISCLAIMER } from "../../project/export";
 import type { TransformPatch } from "../state";
 import { GENERATE_PARENT_SETUP_MESSAGE, PALETTE, PATTERN_IDEAS } from "./text";
+import { IconOval, IconRectangle } from "./icons";
 
 export function SheetBackdrop({
   label,
@@ -92,6 +93,39 @@ export function AddSheet({
           {GENERATE_PARENT_SETUP_MESSAGE}
         </p>
       )}
+      <button type="button" class="sheet-cancel" aria-label="Cancel" onClick={onCancel}>
+        Cancel
+      </button>
+    </SheetBackdrop>
+  );
+}
+
+export function CutoutShapeSheet({
+  onChoose,
+  onCancel,
+}: {
+  onChoose: (shape: CutoutShape) => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <SheetBackdrop label="Cut Out Shape" onDismiss={onCancel} sheetClass="cutout-shape-sheet">
+      <h2 class="sheet-title">Cut Out Shape</h2>
+      <button type="button" class="big-choice shape-choice" aria-label="Rectangle" onClick={() => onChoose("rectangle")}>
+        <IconRectangle />
+        <span>Rectangle</span>
+      </button>
+      <button type="button" class="big-choice shape-choice" aria-label="Oval" onClick={() => onChoose("ellipse")}>
+        <IconOval />
+        <span>Oval</span>
+      </button>
       <button type="button" class="sheet-cancel" aria-label="Cancel" onClick={onCancel}>
         Cancel
       </button>
@@ -502,6 +536,7 @@ function commitField(props: MoreSheetProps, key: FieldKey, value: number): void 
 
 export function MoreSheet(props: MoreSheetProps) {
   const layer = props.layer;
+  const compact = layer.kind === "cutout" || (layer.kind === "solid" && isDecalSolid(layer));
   const [nonce, setNonce] = useState(0);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -545,7 +580,11 @@ export function MoreSheet(props: MoreSheetProps) {
   }, [props.onClose]);
 
   return (
-    <SheetBackdrop label="More" onDismiss={props.onClose} sheetClass="more-sheet">
+    <SheetBackdrop
+      label="More"
+      onDismiss={props.onClose}
+      sheetClass={`more-sheet${compact ? " compact-more-sheet" : ""}`}
+    >
       <h2 class="sheet-title">More</h2>
       <form class="more-form" ref={formRef} onSubmit={(event) => event.preventDefault()}>
         {visibleFields.map((field) => {

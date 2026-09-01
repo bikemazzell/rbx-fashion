@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { AssetStore } from "../../assets/store";
 import { composeProject } from "../../compositor/compose";
 import { getTemplate } from "../../domain/registry";
-import type { CutoutRect, Layer, ProjectDocument, Rect, TemplateRegistryEntry } from "../../domain/types";
+import type { CutoutRect, CutoutShape, Layer, ProjectDocument, Rect, TemplateRegistryEntry } from "../../domain/types";
 import type { EditorAction, EditorSession } from "../state";
 import { createGestureController, footprintGeometry } from "./gestures";
 import type { Point, Viewport } from "./gestures";
@@ -16,8 +16,8 @@ interface WorkspaceProps {
   getSession: () => EditorSession;
   dispatch: (action: EditorAction) => void;
   onSelect: (id: string | null) => void;
-  drawingCutout: boolean;
-  onCreateCutout: (rect: CutoutRect) => void;
+  drawingCutoutShape: CutoutShape | null;
+  onCreateCutout: (rect: CutoutRect, shape: CutoutShape) => void;
   onCancelCutout: () => void;
 }
 
@@ -139,6 +139,25 @@ function strokePolygon(
   ctx.stroke();
 }
 
+function strokeEllipse(
+  ctx: CanvasRenderingContext2D,
+  footprint: ReturnType<typeof cutoutFootprint>,
+  lineWidth: number,
+): void {
+  ctx.save();
+  ctx.translate(footprint.center.x, footprint.center.y);
+  ctx.rotate((footprint.rotationDeg * Math.PI) / 180);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, footprint.halfWidth, footprint.halfHeight, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = "#0b3954";
+  ctx.lineWidth = lineWidth * 2;
+  ctx.stroke();
+  ctx.strokeStyle = "#00c4ff";
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawHandle(
   ctx: CanvasRenderingContext2D,
   point: Point,
@@ -160,22 +179,25 @@ export function Workspace(props: WorkspaceProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const [viewport, setViewport] = useState<Viewport>({ panX: 0, panY: 0, scale: 1 });
-  const [cutoutDraft, setCutoutDraft] = useState<CutoutRect | null>(null);
+  const [cutoutDraft, setCutoutDraft] = useState<{
+    rect: CutoutRect;
+    shape: CutoutShape;
+  } | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
 
   useEffect(() => {
-    if (!props.drawingCutout) return;
+    if (props.drawingCutoutShape === null) return;
     const cancel = (event: KeyboardEvent) => {
       if (event.key === "Escape") props.onCancelCutout();
     };
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
-  }, [props.drawingCutout, props.onCancelCutout]);
+  }, [props.drawingCutoutShape, props.onCancelCutout]);
 
   useEffect(() => {
-    if (!props.drawingCutout) setCutoutDraft(null);
-  }, [props.drawingCutout]);
+    if (props.drawingCutoutShape === null) setCutoutDraft(null);
+  }, [props.drawingCutoutShape]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -215,16 +237,26 @@ export function Workspace(props: WorkspaceProps) {
       return;
     }
     overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+    delete overlay.dataset.draftShape;
+    delete overlay.dataset.selectionShape;
     if (cutoutDraft !== null) {
+      const draft = cutoutDraft.rect;
       overlayCtx.save();
-      overlayCtx.translate(cutoutDraft.centerX, cutoutDraft.centerY);
-      overlayCtx.rotate((cutoutDraft.rotationDeg * Math.PI) / 180);
+      overlayCtx.translate(draft.centerX, draft.centerY);
+      overlayCtx.rotate((draft.rotationDeg * Math.PI) / 180);
       overlayCtx.setLineDash([12, 8]);
       overlayCtx.strokeStyle = "#7c3aed";
       overlayCtx.lineWidth = Math.max(4, template.width / 120);
-      overlayCtx.strokeRect(-cutoutDraft.width / 2, -cutoutDraft.height / 2, cutoutDraft.width, cutoutDraft.height);
+      if (cutoutDraft.shape === "ellipse") {
+        overlayCtx.beginPath();
+        overlayCtx.ellipse(0, 0, draft.width / 2, draft.height / 2, 0, 0, Math.PI * 2);
+        overlayCtx.stroke();
+      } else {
+        overlayCtx.strokeRect(-draft.width / 2, -draft.height / 2, draft.width, draft.height);
+      }
       overlayCtx.restore();
       overlay.dataset.hasCutoutDraft = "true";
+      overlay.dataset.draftShape = cutoutDraft.shape;
     } else {
       delete overlay.dataset.hasCutoutDraft;
     }
@@ -254,7 +286,13 @@ export function Workspace(props: WorkspaceProps) {
                       });
                 })();
       if (footprint !== null) {
-        strokePolygon(overlayCtx, footprint.corners, lineWidth);
+        if (layer.kind === "cutout" && layer.shape === "ellipse") {
+          strokeEllipse(overlayCtx, footprint, lineWidth);
+          overlay.dataset.selectionShape = "ellipse";
+        } else {
+          strokePolygon(overlayCtx, footprint.corners, lineWidth);
+          if (layer.kind === "cutout") overlay.dataset.selectionShape = "rectangle";
+        }
         const topStart = footprint.corners[0];
         const topEnd = footprint.corners[1];
         if (topStart !== undefined && topEnd !== undefined) {
@@ -363,9 +401,11 @@ export function Workspace(props: WorkspaceProps) {
         return footprintGeometry(layer.transform, asset, handleBounds);
       },
       onViewportChange: setViewport,
-      drawingCutout: () => propsRef.current.drawingCutout,
-      onCutoutDraft: setCutoutDraft,
-      onCreateCutout: (rect) => propsRef.current.onCreateCutout(rect),
+      drawingCutout: () => propsRef.current.drawingCutoutShape !== null,
+      cutoutShape: () => propsRef.current.drawingCutoutShape,
+      onCutoutDraft: (rect, shape) =>
+        setCutoutDraft(rect === null || shape === null ? null : { rect, shape }),
+      onCreateCutout: (rect, shape) => propsRef.current.onCreateCutout(rect, shape),
       canvasSize: () => {
         const template = getTemplate(propsRef.current.document.garmentType);
         return { width: template.width, height: template.height };
@@ -378,7 +418,7 @@ export function Workspace(props: WorkspaceProps) {
 
   return (
     <div class="workspace-stage" ref={stageRef} tabIndex={0}>
-      {props.drawingCutout && (
+      {props.drawingCutoutShape !== null && (
         <div class="cutout-instruction" role="status">
           <span>Drag over the part you want see-through.</span>
           <button type="button" aria-label="Cancel Cut Out" onClick={props.onCancelCutout}>Cancel</button>

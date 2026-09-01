@@ -52,6 +52,16 @@ function byLabel(host: HTMLElement, label: string): HTMLElement {
   return requireEl(host.querySelector(`[aria-label="${label}"]`), `aria-label ${label}`);
 }
 
+async function chooseCutoutShape(host: HTMLElement, shape: "Rectangle" | "Oval"): Promise<void> {
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') !== null,
+    "cutout shape sheet",
+  );
+  (byLabel(host, shape) as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, `${shape} draw mode`);
+}
+
 function byText(host: HTMLElement, text: string): HTMLButtonElement {
   const buttons = Array.from(host.querySelectorAll("button")) as HTMLButtonElement[];
   const found = buttons.find((button) => (button.textContent ?? "").trim() === text);
@@ -263,14 +273,67 @@ test("a new editor points to Add and disables Repeat until a visible picture is 
   expect(more.querySelector('[aria-label="Tall"]')).toBeNull();
 });
 
+test("Cut Out keeps one Add entry and offers Rectangle or Oval before drawing", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  toolbarButton(host, "Add").click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  expect(host.querySelectorAll('[role="dialog"][aria-label="Add"] [aria-label="Cut Out"]')).toHaveLength(1);
+  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') !== null,
+    "cutout shape sheet",
+  );
+  expect(byLabel(host, "Undo").getAttribute("aria-disabled")).toBe("true");
+  expect(byLabel(host, "Rectangle")).toBeInstanceOf(HTMLButtonElement);
+  expect(byLabel(host, "Oval")).toBeInstanceOf(HTMLButtonElement);
+  (byLabel(host, "Oval") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "oval drawing mode");
+  expect(byLabel(host, "Undo").getAttribute("aria-disabled")).toBe("true");
+  (byLabel(host, "Cancel Cut Out") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "drawing cancelled");
+  expect(byLabel(host, "Undo").getAttribute("aria-disabled")).toBe("true");
+});
+
+test("Cut Out shape choice closes with Escape, backdrop, or Cancel without editing", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+
+  for (const close of ["Escape", "Backdrop", "Cancel"] as const) {
+    toolbarButton(host, "Add").click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+    (byLabel(host, "Cut Out") as HTMLButtonElement).click();
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') !== null,
+      "cutout shape sheet",
+    );
+    if (close === "Escape") {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    } else if (close === "Backdrop") {
+      const sheet = dialog(host, "Cut Out Shape");
+      requireEl(sheet.parentElement, "shape backdrop").dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    } else {
+      (dialog(host, "Cut Out Shape").querySelector('[aria-label="Cancel"]') as HTMLButtonElement).click();
+    }
+    await waitFor(
+      () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') === null,
+      `${close} closes shape sheet`,
+    );
+    expect(host.querySelector(".cutout-instruction")).toBeNull();
+    expect(byLabel(host, "Undo").getAttribute("aria-disabled")).toBe("true");
+  }
+});
+
 test("cutouts have focused controls, visible transparency, and no dead reorder buttons", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
   await addColor(host, 0);
   toolbarButton(host, "Add").click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  await chooseCutoutShape(host, "Rectangle");
   expect(getComputedStyle(requireEl(host.querySelector(".cutout-instruction"), "instruction")).pointerEvents).toBe("none");
   expect(getComputedStyle(byLabel(host, "Cancel Cut Out")).pointerEvents).toBe("auto");
   const overlay = requireEl(host.querySelector(".workspace-overlay"), "overlay") as HTMLCanvasElement;
@@ -294,7 +357,7 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
   expect(cutoutMore.querySelector('[aria-label="Tall"]')).toBeNull();
   await closeSheet(host, "More", "Done");
   await openItems(host);
-  expect(itemNames(host)[0]).toBe("Cut Out 1");
+  expect(itemNames(host)[0]).toBe("Rectangle Cut Out 1");
   expect(itemRows(host)[0]?.querySelector('[aria-label="Move Up"]')).toBeNull();
   expect(itemRows(host)[0]?.querySelector('[aria-label="Move Down"]')).toBeNull();
   const paintUp = itemRows(host)[1]?.querySelector<HTMLButtonElement>('[aria-label="Move Up"]');
@@ -306,8 +369,7 @@ test("adding paint above an existing cutout selects the new paint, and Preview c
   await startEditing(host, "Shirt");
   toolbarButton(host, "Add").click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "draw mode");
+  await chooseCutoutShape(host, "Rectangle");
   const overlay = requireEl(host.querySelector(".workspace-overlay"), "overlay") as HTMLCanvasElement;
   const rect = overlay.getBoundingClientRect();
   overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }));
@@ -321,8 +383,7 @@ test("adding paint above an existing cutout selects the new paint, and Preview c
 
   toolbarButton(host, "Add").click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "second add sheet");
-  (byLabel(host, "Cut Out") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".cutout-instruction") !== null, "second draw mode");
+  await chooseCutoutShape(host, "Rectangle");
   const view = requireEl(host.querySelector('nav[aria-label="View"]'), "view navigation");
   (requireEl(view.querySelector('[aria-pressed="false"]'), "preview tab") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector(".cutout-instruction") === null, "preview tab cancels draw mode");

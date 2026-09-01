@@ -231,8 +231,8 @@ async function garmentProject(
   const cutout: Layer = {
     id: "layer-3",
     name: "Cut Out 1",
-        kind: "cutout",
-        shape: "rectangle",
+    kind: "cutout",
+    shape: "ellipse",
     visible: true,
     rect: { centerX: project.garmentType === "tshirt" ? 256 : 292.5, centerY: project.garmentType === "tshirt" ? 256 : 279.5, width: 48, height: 36, rotationDeg: 12 },
   };
@@ -388,7 +388,10 @@ test("Open replaces the project content, store, selection, and megapixel budget"
     "project name swaps to opened document",
   );
   expect(await itemNames(host)).toEqual(["Cut Out 1", "Picture 1", "Color 1"]);
-  await waitFor(() => host.querySelector(".cutout-selection-label") !== null, "top-most cutout selected");
+  await waitFor(
+    () => host.querySelector(".cutout-selection-label")?.textContent === "Oval Cut Out",
+    "top-most oval cutout selected",
+  );
   await waitFor(
     () => countOpaque(canvasData(workspaceCanvas(host))) > 1000,
     "opened raster paints the canvas",
