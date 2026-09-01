@@ -52,8 +52,8 @@ export function AddSheet({
 }) {
   const [generateBlocked, setGenerateBlocked] = useState(false);
   return (
-    <SheetBackdrop label="Add">
-      <h2 class="sheet-title">Add</h2>
+    <SheetBackdrop label="Add Layer">
+      <h2 class="sheet-title">Add Layer</h2>
       <label class="big-choice">
         <span>Choose Picture</span>
         <input
@@ -69,7 +69,7 @@ export function AddSheet({
           }}
         />
       </label>
-      <button type="button" class="big-choice" onClick={onChooseColor}>
+      <button type="button" class="big-choice" aria-label="Choose Color" onClick={onChooseColor}>
         <span>Choose Color</span>
       </button>
       <button type="button" class="big-choice" aria-label="Cut Out" onClick={onCutout}>
@@ -453,6 +453,7 @@ export interface MoreSheetProps {
   onTransformCommit: (patch: TransformPatch) => void;
   onOpacityCommit: (percent: number) => void;
   onCutoutCommit: (patch: Partial<CutoutRect>) => void;
+  onChangeColor: () => void;
   onClose: () => void;
 }
 
@@ -586,6 +587,12 @@ export function MoreSheet(props: MoreSheetProps) {
       sheetClass={`more-sheet${compact ? " compact-more-sheet" : ""}`}
     >
       <h2 class="sheet-title">More</h2>
+      {layer.kind === "solid" && (
+        <button type="button" class="big-choice change-color-button" onClick={props.onChangeColor}>
+          <span>Change Color</span>
+          <span class="color-preview" aria-hidden="true" style={{ backgroundColor: layer.color }} />
+        </button>
+      )}
       <form class="more-form" ref={formRef} onSubmit={(event) => event.preventDefault()}>
         {visibleFields.map((field) => {
           const pixelSize = field.key === "size" && layer.kind !== "raster";

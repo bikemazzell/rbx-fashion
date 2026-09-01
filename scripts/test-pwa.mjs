@@ -45,8 +45,8 @@ async function step(name, body) {
   }
 }
 
-async function openItemsSheet() {
-  await page.getByRole("button", { name: "Items" }).click();
+async function openLayersSheet() {
+  await page.getByRole("button", { name: "Layers" }).click();
   await page.locator(".item-row").first().waitFor({ state: "visible", timeout: 15000 });
 }
 
@@ -192,9 +192,12 @@ async function run() {
         .locator(".project-name")
         .filter({ hasText: "My Shirt" })
         .waitFor({ state: "attached", timeout: 15000 });
-      await page.getByRole("button", { name: "Color" }).click();
+      await page.getByRole("button", { name: "Layers", exact: true }).click();
+      await page.getByRole("button", { name: "Add Layer", exact: true }).click();
+      await page.getByRole("button", { name: "Choose Color", exact: true }).click();
       await page.getByRole("button", { name: "Red", exact: true }).click();
-      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await page.getByRole("button", { name: "Layers", exact: true }).click();
+      await page.getByRole("button", { name: "Add Layer", exact: true }).click();
       await page.getByRole("button", { name: "Cut Out", exact: true }).click();
       await page.getByRole("button", { name: "Oval", exact: true }).click();
       const overlay = page.locator(".workspace-overlay");
@@ -208,12 +211,12 @@ async function run() {
       if (await page.getByRole("button", { name: "Undo" }).isDisabled()) {
         fail("offline-editing", "Undo is disabled after adding a color item");
       }
-      await openItemsSheet();
+      await openLayersSheet();
       const rowCount = await page.locator(".item-row").count();
       if (rowCount !== 2) {
-        fail("offline-editing", `expected 2 items in the Items sheet, found ${rowCount}`);
+        fail("offline-editing", `expected 2 layers in the Layers sheet, found ${rowCount}`);
       }
-      await page.getByLabel("Item name").nth(1).fill("Offline Red");
+      await page.getByLabel("Layer name").nth(1).fill("Offline Red");
       await page.keyboard.press("Enter");
       await page.getByRole("button", { name: "Done" }).click();
     });
@@ -257,8 +260,8 @@ async function run() {
         const undo = document.querySelector('button[aria-label="Undo"]');
         return undo !== null && undo.disabled;
       }, undefined, { timeout: 20000 });
-      await openItemsSheet();
-      const itemName = await page.getByLabel("Item name").nth(1).inputValue();
+      await openLayersSheet();
+      const itemName = await page.getByLabel("Layer name").nth(1).inputValue();
       if (itemName !== "Offline Red") {
         fail("offline-projects", `reopened item name is ${JSON.stringify(itemName)}`);
       }

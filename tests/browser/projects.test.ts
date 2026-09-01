@@ -86,11 +86,19 @@ function openInput(host: HTMLElement): HTMLInputElement {
 
 async function startEditing(host: HTMLElement, garment: string): Promise<void> {
   (byLabel(host, garment) as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
+}
+
+async function openAddSheet(host: HTMLElement): Promise<void> {
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null, "layers sheet");
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
 }
 
 async function addColor(host: HTMLElement, swatchIndex: number): Promise<void> {
-  (requireEl(host.querySelector('.toolbar [aria-label="Color"]'), "color tool") as HTMLButtonElement).click();
+  await openAddSheet(host);
+  (byLabel(host, "Choose Color") as HTMLButtonElement).click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null,
     "color sheet",
@@ -141,20 +149,20 @@ async function chooseOpenFile(host: HTMLElement, file: File): Promise<void> {
 }
 
 async function itemNames(host: HTMLElement): Promise<string[]> {
-  (byLabel(host, "Items") as HTMLButtonElement).click();
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Items"]') !== null,
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null,
     "items sheet",
   );
   const names = Array.from(
-    host.querySelectorAll('[role="dialog"][aria-label="Items"] .item-row .item-name'),
+    host.querySelectorAll('[role="dialog"][aria-label="Layers"] .item-row .item-name'),
   ).map((input) => (input as HTMLInputElement).value);
   (requireEl(
-    host.querySelector('[role="dialog"][aria-label="Items"] [aria-label="Done"]'),
+    host.querySelector('[role="dialog"][aria-label="Layers"] [aria-label="Done"]'),
     "done",
   ) as HTMLButtonElement).click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Items"]') === null,
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') === null,
     "items sheet closes",
   );
   return names;
@@ -655,13 +663,9 @@ async function pictureFile(width: number, height: number): Promise<File> {
 }
 
 async function choosePicture(host: HTMLElement, file: File): Promise<void> {
-  (requireEl(host.querySelector('.toolbar [aria-label="Add"]'), "add tool") as HTMLButtonElement).click();
-  await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Add"]') !== null,
-    "add sheet",
-  );
+  await openAddSheet(host);
   const input = requireEl(
-    host.querySelector('[role="dialog"][aria-label="Add"] input[type="file"]'),
+    host.querySelector('[role="dialog"][aria-label="Add Layer"] input[type="file"]'),
     "file input",
   ) as HTMLInputElement;
   const transfer = new DataTransfer();
@@ -758,6 +762,45 @@ test("Open Saved Project opens a valid archive without starting a throwaway garm
     "saved project opens from start",
   );
   expect(await itemNames(host)).toEqual(["Cut Out 1", "Picture 1", "Color 1"]);
+}, 15000);
+
+test("a saved full-clothing color can be changed through More without adding a layer", async () => {
+  const host = mountApp();
+  const document = createProject("shirt", "Legacy Color");
+  document.layers = [{
+    id: "legacy-color",
+    name: "Color 1",
+    kind: "solid",
+    color: "#3366cc",
+    visible: true,
+    opacity: 1,
+    placement: "full-map",
+    transform: {
+      ...defaultTransform("full-map", { width: 1, height: 1 }, getTemplate("shirt")),
+      crop: { x: 0, y: 0, width: 1, height: 1 },
+    },
+  }];
+  const saved = await saveProject(document, () => {
+    throw new Error("asset-free project requested an asset");
+  });
+  expect(saved.ok).toBe(true);
+  if (!saved.ok) return;
+
+  await chooseOpenFile(host, new File([saved.blob], "legacy-color.rbxcloth.zip", {
+    type: "application/zip",
+  }));
+  await waitFor(() => host.querySelector(".project-name")?.textContent === "Legacy Color", "legacy project opens");
+  (byLabel(host, "More") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "legacy color More");
+  expect(byText(host, "Change Color")).toBeInstanceOf(HTMLButtonElement);
+  byText(host, "Change Color").click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null, "legacy color choices");
+  (byLabel(host, "Green") as HTMLButtonElement).click();
+  await waitFor(() => {
+    const data = canvasData(workspaceCanvas(host));
+    return data[0] === 67 && data[1] === 160 && data[2] === 71 && data[3] === 255;
+  }, "legacy full-clothing color becomes green");
+  expect(await itemNames(host)).toEqual(["Color 1"]);
 }, 15000);
 
 test("an invalid welcome-screen project leaves garment choices visible and explains the error", async () => {

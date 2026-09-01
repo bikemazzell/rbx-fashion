@@ -71,10 +71,10 @@ function byText(host: HTMLElement, text: string): HTMLButtonElement {
   return found;
 }
 
-function toolbarButton(host: HTMLElement, label: string): HTMLButtonElement {
+function projectButton(host: HTMLElement, label: string): HTMLButtonElement {
   return requireEl(
-    host.querySelector(`.toolbar [aria-label="${label}"]`),
-    `toolbar ${label}`,
+    host.querySelector(`[aria-label="Project files"] [aria-label="${label}"]`),
+    `project file ${label}`,
   ) as HTMLButtonElement;
 }
 
@@ -82,6 +82,13 @@ function segmentedButton(host: HTMLElement, label: string): HTMLButtonElement {
   return requireEl(
     host.querySelector(`.segmented [aria-label="${label}"]`),
     `segmented ${label}`,
+  ) as HTMLButtonElement;
+}
+
+function viewButton(host: HTMLElement, label: string): HTMLButtonElement {
+  return requireEl(
+    host.querySelector(`[aria-label="View"] button:nth-child(${label === "Edit" ? 1 : 2})`),
+    `view ${label}`,
   ) as HTMLButtonElement;
 }
 
@@ -108,11 +115,17 @@ async function closeSheet(host: HTMLElement, label: string, closeLabel: string):
 
 async function startEditing(host: HTMLElement, garment: string): Promise<void> {
   (byLabel(host, garment) as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
 }
 
 async function addColor(host: HTMLElement, swatchIndex: number): Promise<void> {
-  toolbarButton(host, "Color").click();
+  await openItems(host);
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null,
+    "add layer sheet",
+  );
+  (byText(host, "Choose Color") as HTMLButtonElement).click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null,
     "color sheet",
@@ -130,17 +143,17 @@ async function addColor(host: HTMLElement, swatchIndex: number): Promise<void> {
 }
 
 async function openItems(host: HTMLElement): Promise<HTMLElement> {
-  (byLabel(host, "Items") as HTMLButtonElement).click();
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Items"]') !== null,
-    "items sheet",
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null,
+    "layers sheet",
   );
-  return dialog(host, "Items");
+  return dialog(host, "Layers");
 }
 
 function itemRows(host: HTMLElement): HTMLElement[] {
   return Array.from(
-    host.querySelectorAll('[role="dialog"][aria-label="Items"] .item-row'),
+    host.querySelectorAll('[role="dialog"][aria-label="Layers"] .item-row'),
   ) as HTMLElement[];
 }
 
@@ -210,10 +223,11 @@ async function pngFile(
 }
 
 async function choosePicture(host: HTMLElement, file: File): Promise<void> {
-  toolbarButton(host, "Add").click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openItems(host);
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
   const input = requireEl(
-    host.querySelector('[role="dialog"][aria-label="Add"] input[type="file"]'),
+    host.querySelector('[role="dialog"][aria-label="Add Layer"] input[type="file"]'),
     "file input",
   ) as HTMLInputElement;
   const transfer = new DataTransfer();
@@ -238,7 +252,7 @@ test("start screen offers three garments and a fresh editor starts empty with di
   expect(host.textContent).toContain("Covers the waist and legs");
   expect(byLabel(host, "Open Saved Project")).toBeTruthy();
   (byLabel(host, "Shirt") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
   expect(requireEl(host.querySelector(".project-name"), "project name").textContent).toBe("My Shirt");
   const undo = byLabel(host, "Undo") as HTMLButtonElement;
   const redo = byLabel(host, "Redo") as HTMLButtonElement;
@@ -249,20 +263,61 @@ test("start screen offers three garments and a fresh editor starts empty with di
   await openItems(host);
   expect(itemRows(host)).toHaveLength(0);
   expect(host.querySelector(".segmented")).toBeNull();
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
 });
 
-test("a new editor points to Add and disables Repeat until a visible picture is selected", async () => {
+test("project files and Layers own global actions without a bottom Tools toolbar", async () => {
+  const host = mountApp();
+  (byLabel(host, "Shirt") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor header");
+
+  expect(host.querySelector('nav[aria-label="Tools"]')).toBeNull();
+  expect(host.querySelector(".toolbar")).toBeNull();
+  expect(host.querySelector('[aria-label="Move"]')).toBeNull();
+  const files = requireEl(
+    host.querySelector('nav[aria-label="Project files"]'),
+    "Project files navigation",
+  );
+  expect(Array.from(files.querySelectorAll("button")).map((button) => button.textContent)).toEqual([
+    "New",
+    "Open",
+    "Save",
+    "Export",
+  ]);
+  expect(host.querySelector(".workspace-empty")?.textContent).toBe(
+    "Open Layers to add a picture, color, or cutout.",
+  );
+
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null,
+    "Layers sheet",
+  );
+  const layers = dialog(host, "Layers");
+  const addLayer = requireEl(layers.querySelector('[aria-label="Add Layer"]'), "Add Layer");
+  expect(addLayer).toBeInstanceOf(HTMLButtonElement);
+  expect(layers.textContent).toContain("No layers yet. Choose Add Layer to begin.");
+  expect(layers.textContent?.indexOf("Add Layer")).toBeLessThan(
+    layers.textContent?.indexOf("No layers yet") ?? -1,
+  );
+  (addLayer as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null,
+    "Add Layer sheet",
+  );
+});
+
+test("a new editor points to Layers and has no inactive global Repeat control", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
   expect(host.querySelector(".workspace-empty")?.textContent).toBe(
-    "Tap Add to add a picture or color.",
+    "Open Layers to add a picture, color, or cutout.",
   );
-  expect(toolbarButton(host, "Repeat").disabled).toBe(true);
+  expect(host.querySelector('[aria-label="Repeat"]')).toBeNull();
 
   await addColor(host, 0);
   expect(host.querySelector(".workspace-empty")).toBeNull();
-  expect(toolbarButton(host, "Repeat").disabled).toBe(true);
+  expect(host.querySelector('[aria-label="Repeat"]')).toBeNull();
   moreButton(host).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more");
   const more = dialog(host, "More");
@@ -276,9 +331,10 @@ test("a new editor points to Add and disables Repeat until a visible picture is 
 test("Cut Out keeps one Add entry and offers Rectangle or Oval before drawing", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  toolbarButton(host, "Add").click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
-  expect(host.querySelectorAll('[role="dialog"][aria-label="Add"] [aria-label="Cut Out"]')).toHaveLength(1);
+  await openItems(host);
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
+  expect(host.querySelectorAll('[role="dialog"][aria-label="Add Layer"] [aria-label="Cut Out"]')).toHaveLength(1);
   (byLabel(host, "Cut Out") as HTMLButtonElement).click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') !== null,
@@ -300,8 +356,9 @@ test("Cut Out shape choice closes with Escape, backdrop, or Cancel without editi
   await startEditing(host, "Shirt");
 
   for (const close of ["Escape", "Backdrop", "Cancel"] as const) {
-    toolbarButton(host, "Add").click();
-    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+    await openItems(host);
+    (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
     (byLabel(host, "Cut Out") as HTMLButtonElement).click();
     await waitFor(
       () => host.querySelector('[role="dialog"][aria-label="Cut Out Shape"]') !== null,
@@ -331,8 +388,9 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
   const host = mountApp();
   await startEditing(host, "Shirt");
   await addColor(host, 0);
-  toolbarButton(host, "Add").click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openItems(host);
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
   await chooseCutoutShape(host, "Rectangle");
   expect(getComputedStyle(requireEl(host.querySelector(".cutout-instruction"), "instruction")).pointerEvents).toBe("none");
   expect(getComputedStyle(byLabel(host, "Cancel Cut Out")).pointerEvents).toBe("auto");
@@ -350,6 +408,7 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
   moreButton(host).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "cutout more");
   const cutoutMore = dialog(host, "More");
+  expect(cutoutMore.querySelector(".change-color-button")).toBeNull();
   expect(Array.from(cutoutMore.querySelectorAll("input")).map((input) => input.getAttribute("aria-label"))).toEqual([
     "Left/Right", "Up/Down", "Turn", "Size",
   ]);
@@ -367,8 +426,9 @@ test("cutouts have focused controls, visible transparency, and no dead reorder b
 test("adding paint above an existing cutout selects the new paint, and Preview cancels draw mode", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  toolbarButton(host, "Add").click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openItems(host);
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
   await chooseCutoutShape(host, "Rectangle");
   const overlay = requireEl(host.querySelector(".workspace-overlay"), "overlay") as HTMLCanvasElement;
   const rect = overlay.getBoundingClientRect();
@@ -381,8 +441,9 @@ test("adding paint above an existing cutout selects the new paint, and Preview c
     "new paint selected",
   );
 
-  toolbarButton(host, "Add").click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "second add sheet");
+  await openItems(host);
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "second add layer sheet");
   await chooseCutoutShape(host, "Rectangle");
   const view = requireEl(host.querySelector('nav[aria-label="View"]'), "view navigation");
   (requireEl(view.querySelector('[aria-pressed="false"]'), "preview tab") as HTMLButtonElement).click();
@@ -396,7 +457,7 @@ test("adding a color creates one undoable item and shows a Color label", async (
   await openItems(host);
   expect(itemNames(host)).toEqual(["Color 1"]);
   expect(requireEl(host.querySelector(".project-name"), "name").textContent).toBe("My T-shirt");
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
   const undo = byLabel(host, "Undo") as HTMLButtonElement;
   const redo = byLabel(host, "Redo") as HTMLButtonElement;
   expect(undo.disabled).toBe(false);
@@ -404,18 +465,18 @@ test("adding a color creates one undoable item and shows a Color label", async (
   undo.click();
   await openItems(host);
   await waitFor(() => itemRows(host).length === 0, "undo removes item");
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
   expect(redo.disabled).toBe(false);
   redo.click();
   await openItems(host);
   await waitFor(() => itemNames(host).length === 1, "redo restores item");
   expect(itemNames(host)).toEqual(["Color 1"]);
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
   expect(host.querySelector(".cutout-selection-label")?.textContent).toBe("Color");
   expect(host.querySelector(".segmented")).toBeNull();
 }, 10000);
 
-test("choosing another swatch with a color selected recolors it without adding an item", async () => {
+test("Choose Color adds a new patch even when another color patch is selected", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
   await addColor(host, 0);
@@ -427,15 +488,50 @@ test("choosing another swatch with a color selected recolors it without adding a
   await waitFor(() => {
     const [r, g, b, a] = pixelAt(host, 292, 230);
     return r === 67 && g === 160 && b === 71 && a === 255;
-  }, "recolor changes the torso to green");
+  }, "new green patch paints over the red patch");
   await openItems(host);
-  expect(itemNames(host)).toEqual(["Color 1"]);
-  await closeSheet(host, "Items", "Done");
+  expect(itemNames(host)).toEqual(["Color 2", "Color 1"]);
+  await closeSheet(host, "Layers", "Done");
   (byLabel(host, "Undo") as HTMLButtonElement).click();
   await waitFor(() => {
     const [r, g, b, a] = pixelAt(host, 292, 230);
     return r === 229 && g === 57 && b === 53 && a === 255;
-  }, "undo restores the red rectangle");
+  }, "undo removes the new green patch");
+}, 10000);
+
+test("Change Color in More edits only the selected color patch and Cancel changes nothing", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  await addColor(host, 0);
+
+  moreButton(host).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more sheet");
+  expect(dialog(host, "More").querySelector(".color-preview")?.getAttribute("aria-hidden")).toBe("true");
+  (byText(host, "Change Color") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null, "colors sheet");
+  (byLabel(host, "Green") as HTMLButtonElement).click();
+  await waitFor(() => {
+    const [r, g, b, a] = pixelAt(host, 292, 230);
+    return r === 67 && g === 160 && b === 71 && a === 255;
+  }, "selected patch becomes green");
+  await openItems(host);
+  expect(itemNames(host)).toEqual(["Color 1"]);
+  await closeSheet(host, "Layers", "Done");
+
+  moreButton(host).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more reopens");
+  (byText(host, "Change Color") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null, "colors reopen");
+  await closeSheet(host, "Colors", "Cancel");
+  expect(host.querySelector('[role="dialog"][aria-label="More"]')).toBeNull();
+  const [r, g, b, a] = pixelAt(host, 292, 230);
+  expect([r, g, b, a]).toEqual([67, 160, 71, 255]);
+
+  (byLabel(host, "Undo") as HTMLButtonElement).click();
+  await waitFor(() => {
+    const [red, green, blue, alpha] = pixelAt(host, 292, 230);
+    return red === 229 && green === 57 && blue === 53 && alpha === 255;
+  }, "undo restores red");
 }, 10000);
 
 test("items sheet supports rename, duplicate, visibility, reorder, and delete", async () => {
@@ -463,8 +559,8 @@ test("items sheet supports rename, duplicate, visibility, reorder, and delete", 
   await waitFor(() => firstRow.querySelector('[aria-label="Hide"]') !== null, "visible eye restored");
 
   const firstCopy = requireEl(
-    firstRow.querySelector<HTMLButtonElement>('[aria-label="Copy item"]'),
-    "copy item",
+    firstRow.querySelector<HTMLButtonElement>('[aria-label="Copy layer"]'),
+    "copy layer",
   );
   expect((firstCopy.textContent ?? "").trim()).toBe("Copy");
   expect(firstCopy.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
@@ -477,17 +573,17 @@ test("items sheet supports rename, duplicate, visibility, reorder, and delete", 
   const nameInput = requireEl(itemRows(host)[1]?.querySelector(".item-name"), "name input") as HTMLInputElement;
   nameInput.value = "My Red";
   nameInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
   (byLabel(host, "Undo") as HTMLButtonElement).click();
   await openItems(host);
   await waitFor(() => itemNames(host)[1] === "Color 1", "rename undo");
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
   (byLabel(host, "Redo") as HTMLButtonElement).click();
   await openItems(host);
   await waitFor(() => itemNames(host)[1] === "My Red", "rename redo");
 
   const renameRow = itemRows(host)[1];
-  (requireEl(renameRow?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
+  (requireEl(renameRow?.querySelector('[aria-label="Copy layer"]'), "copy layer") as HTMLButtonElement).click();
   await waitFor(() => itemRows(host).length === 3, "duplicate adds item");
   expect(itemNames(host)).toEqual(["Color 3", "Color 2", "My Red"]);
 
@@ -532,11 +628,11 @@ test("ninth add is refused with a friendly message", async () => {
   await addColor(host, 0);
   await openItems(host);
   for (let index = 1; index < 8; index += 1) {
-    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
+    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy layer"]'), "copy layer") as HTMLButtonElement).click();
     await waitFor(() => itemRows(host).length === index + 1, `item ${index + 1}`);
   }
   expect(itemRows(host)).toHaveLength(8);
-  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
+  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy layer"]'), "copy layer") as HTMLButtonElement).click();
   await waitFor(() => statusText(host).includes(ITEM_CAP_MESSAGE), "cap message");
   expect(itemRows(host)).toHaveLength(8);
 }, 20000);
@@ -548,18 +644,15 @@ test("picture imports as a sticker and Fill Clothing changes composited pixels",
   await waitFor(() => host.querySelector(".segmented") !== null, "segmented appears");
   expect(segmentedButton(host, "Sticker").getAttribute("aria-pressed")).toBe("true");
   expect(segmentedButton(host, "Fill Clothing").getAttribute("aria-pressed")).toBe("false");
-  expect(toolbarButton(host, "Repeat").disabled).toBe(false);
   await openItems(host);
   expect(itemNames(host)).toEqual(["Picture 1"]);
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
   await openItems(host);
   (requireEl(itemRows(host)[0]?.querySelector('[aria-pressed]'), "eye toggle") as HTMLButtonElement).click();
-  await closeSheet(host, "Items", "Done");
-  await waitFor(() => toolbarButton(host, "Repeat").disabled === true, "repeat disabled while hidden");
+  await closeSheet(host, "Layers", "Done");
   await openItems(host);
   (requireEl(itemRows(host)[0]?.querySelector('[aria-pressed]'), "eye toggle") as HTMLButtonElement).click();
-  await closeSheet(host, "Items", "Done");
-  await waitFor(() => toolbarButton(host, "Repeat").disabled === false, "repeat enabled when shown");
+  await closeSheet(host, "Layers", "Done");
   await waitFor(() => pixelAt(host, 10, 10)[3] === 0, "decal leaves corner empty");
   segmentedButton(host, "Fill Clothing").click();
   await waitFor(() => {
@@ -597,6 +690,7 @@ test("more sheet ignores inside clicks, closes on backdrop and Escape, and keeps
     await waitFor(() => host.querySelector(".segmented") !== null, "segmented appears");
     moreButton(host).click();
     await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') !== null, "more sheet");
+    expect(dialog(host, "More").querySelector(".change-color-button")).toBeNull();
     const sizeInput = requireEl(
       host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Size"]'),
       "size input",
@@ -633,12 +727,12 @@ test("more sheet ignores inside clicks, closes on backdrop and Escape, and keeps
   }
 }, 15000);
 
-test("pattern too small surfaces the exact child message near the toolbar", async () => {
+test("pattern too small surfaces the exact child message", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
   await choosePicture(host, await pngFile(400, 300));
   await waitFor(() => host.querySelector(".segmented") !== null, "segmented appears");
-  toolbarButton(host, "Repeat").click();
+  segmentedButton(host, "Repeat").click();
   await waitFor(
     () => segmentedButton(host, "Repeat").getAttribute("aria-pressed") === "true",
     "repeat pressed",
@@ -678,7 +772,7 @@ test("export downloads the project png and shows the disclaimer sheet", async ()
   };
   document.addEventListener("click", onClickCapture, true);
   try {
-    toolbarButton(host, "Export").click();
+    projectButton(host, "Export").click();
     await waitFor(() => host.querySelector('[role="dialog"][aria-label="Download ready"]') !== null, "disclaimer");
     expect(downloads).toEqual(["My T-shirt.png"]);
     expect(dialog(host, "Download ready").textContent).toContain(EXPORT_DISCLAIMER);
@@ -712,7 +806,7 @@ test("exporting an empty project shows the see-through warning", async () => {
   };
   document.addEventListener("click", onClickCapture, true);
   try {
-    toolbarButton(host, "Export").click();
+    projectButton(host, "Export").click();
     await waitFor(() => statusText(host).includes(TRANSPARENT_WARNING), "transparent warning");
     expect(downloads).toEqual(["My Shirt.png"]);
     await waitFor(
@@ -732,7 +826,7 @@ test("dirty projects confirm before starting new; clean projects switch immediat
   (byLabel(host, "New") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector("h1")?.textContent === "Roblox Clothing Designer", "clean start");
   (byLabel(host, "Shirt") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor remounts");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor remounts");
   await addColor(host, 2);
   (byLabel(host, "New") as HTMLButtonElement).click();
   await waitFor(
@@ -750,7 +844,7 @@ test("dirty projects confirm before starting new; clean projects switch immediat
     () => host.querySelector('[role="dialog"][aria-label="Start a new project?"]') === null,
     "dialog closes",
   );
-  expect(host.querySelector(".toolbar")).toBeTruthy();
+  expect(host.querySelector(".app-header")).toBeTruthy();
   (byLabel(host, "New") as HTMLButtonElement).click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Start a new project?"]') !== null,
@@ -759,12 +853,12 @@ test("dirty projects confirm before starting new; clean projects switch immediat
   byText(host, "Start New").click();
   await waitFor(() => host.querySelector("h1")?.textContent === "Roblox Clothing Designer", "start screen");
   (byLabel(host, "T-Shirt") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "tshirt editor");
+  await waitFor(() => host.querySelector(".app-header") !== null, "tshirt editor");
   expect(requireEl(host.querySelector(".project-name"), "name").textContent).toBe("My T-shirt");
   await openItems(host);
   expect(itemRows(host)).toHaveLength(0);
   expect((byLabel(host, "Undo") as HTMLButtonElement).disabled).toBe(true);
-  await closeSheet(host, "Items", "Done");
+  await closeSheet(host, "Layers", "Done");
 }, 15000);
 
 test("a 585x559 picture asks Shirt or Pants and builds the chosen project", async () => {
@@ -796,7 +890,7 @@ test("unsupported imports show the child message and change nothing", async () =
     "unsupported message",
   );
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Add"]') === null,
+    () => host.querySelector('[role="dialog"][aria-label="Add Layer"]') === null,
     "add sheet closes after failure",
   );
   await openItems(host);
@@ -807,7 +901,7 @@ test("preview tab mounts the lazy 3D preview or reports it unavailable", async (
   const host = mountApp();
   await startEditing(host, "Shirt");
   const previewPane = requireEl(host.querySelector<HTMLElement>(".pane-preview"), "preview pane");
-  toolbarButton(host, "Preview").click();
+  viewButton(host, "Preview").click();
   await waitFor(
     () =>
       previewPane.querySelector("canvas") !== null ||
@@ -829,7 +923,7 @@ test("preview tab mounts the lazy 3D preview or reports it unavailable", async (
 test("preview Reset button is labeled, sized, and keeps working", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  toolbarButton(host, "Preview").click();
+  viewButton(host, "Preview").click();
   const previewPane = requireEl(host.querySelector<HTMLElement>(".pane-preview"), "preview pane");
   await waitFor(() => previewPane.querySelector("canvas") !== null, "preview canvas", 8000);
   const reset = requireEl(previewPane.querySelector('[aria-label="Reset view"]'), "reset button");
@@ -845,7 +939,7 @@ test("preview Reset button is labeled, sized, and keeps working", async () => {
 test("switching garments after visiting Preview keeps editing, undo, and export working", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  toolbarButton(host, "Preview").click();
+  viewButton(host, "Preview").click();
   const previewPane = requireEl(host.querySelector<HTMLElement>(".pane-preview"), "preview pane");
   await waitFor(() => previewPane.querySelector("canvas") !== null, "preview canvas", 8000);
   await addColor(host, 0);
@@ -870,7 +964,7 @@ test("switching garments after visiting Preview keeps editing, undo, and export 
   expect((byLabel(host, "Undo") as HTMLButtonElement).disabled).toBe(false);
   const stub = stubDownloads();
   try {
-    toolbarButton(host, "Export").click();
+    projectButton(host, "Export").click();
     await waitFor(
       () => host.querySelector('[role="dialog"][aria-label="Download ready"]') !== null,
       "disclaimer",
@@ -949,7 +1043,7 @@ test("an import finishing after a project switch is dropped", async () => {
     await openItems(host);
     expect(itemRows(host)).toHaveLength(0);
     expect((byLabel(host, "Undo") as HTMLButtonElement).disabled).toBe(true);
-    await closeSheet(host, "Items", "Done");
+    await closeSheet(host, "Layers", "Done");
   } finally {
     window.createImageBitmap = originalBitmap;
   }
@@ -961,10 +1055,10 @@ test("a successful edit clears the sticky notice", async () => {
   await addColor(host, 0);
   await openItems(host);
   for (let index = 1; index < 8; index += 1) {
-    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
+    (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy layer"]'), "copy layer") as HTMLButtonElement).click();
     await waitFor(() => itemRows(host).length === index + 1, `item ${index + 1}`);
   }
-  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy item"]'), "copy item") as HTMLButtonElement).click();
+  (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Copy layer"]'), "copy layer") as HTMLButtonElement).click();
   await waitFor(() => statusText(host).includes(ITEM_CAP_MESSAGE), "cap message");
   (requireEl(itemRows(host)[0]?.querySelector('[aria-label="Delete"]'), "delete") as HTMLButtonElement).click();
   await waitFor(() => statusText(host) === "", "notice cleared after delete");
@@ -976,7 +1070,7 @@ test("adding an item after export clears the see-through warning", async () => {
   await startEditing(host, "Shirt");
   const stub = stubDownloads();
   try {
-    toolbarButton(host, "Export").click();
+    projectButton(host, "Export").click();
     await waitFor(() => statusText(host).includes(TRANSPARENT_WARNING), "warning shown");
     await waitFor(
       () => host.querySelector('[role="dialog"][aria-label="Download ready"]') !== null,
@@ -1003,7 +1097,7 @@ test("double-tapping export triggers one download", async () => {
   await addColor(host, 0);
   const stub = stubDownloads();
   try {
-    const exportButton = toolbarButton(host, "Export");
+    const exportButton = projectButton(host, "Export");
     exportButton.click();
     exportButton.click();
     await waitFor(
@@ -1029,20 +1123,19 @@ const VIEWPORTS: readonly [string, number, number][] = [
   ["desktop", 1440, 900],
 ];
 
-test("toolbar stays 44px and axe reports zero violations across the viewport matrix", async () => {
+test("project controls stay reachable and axe reports zero violations across the viewport matrix", async () => {
   for (const [name, width, height] of VIEWPORTS) {
     await page.viewport(width, height);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const host = mountApp();
     await startEditing(host, "Shirt");
-    const toolbar = requireEl(host.querySelector(".toolbar"), "toolbar");
-    const buttons = Array.from(toolbar.querySelectorAll("button")) as HTMLButtonElement[];
+    expect(host.querySelector(".toolbar"), `${name} no obsolete toolbar`).toBeNull();
+    const projectFiles = requireEl(host.querySelector('[aria-label="Project files"]'), "project files");
+    const buttons = Array.from(projectFiles.querySelectorAll("button")) as HTMLButtonElement[];
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Add",
-      "Move",
-      "Repeat",
-      "Color",
-      "Preview",
+      "New",
+      "Open",
+      "Save",
       "Export",
     ]);
     for (const button of buttons) {
@@ -1065,7 +1158,7 @@ test("toolbar stays 44px and axe reports zero violations across the viewport mat
         "workspace stage",
       );
       expect(workspace.getBoundingClientRect().height).toBeGreaterThan(80);
-      expect(toolbar.getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight + 1);
+      expect(projectFiles.getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight + 1);
       expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight + 1);
     }
     if (name === "landscape-phone") {
@@ -1085,12 +1178,12 @@ test("toolbar stays 44px and axe reports zero violations across the viewport mat
       );
       expect(workspace.getBoundingClientRect().height).toBeGreaterThan(80);
       expect(preview.getBoundingClientRect().height).toBeGreaterThan(80);
-      expect(toolbar.getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight + 1);
+      expect(projectFiles.getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight + 1);
       expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight + 1);
     }
     if (name === "desktop") {
       expect(host.querySelector(".items-rail"), `${name} rail present`).not.toBeNull();
-      expect(host.querySelector('.app-header [aria-label="Items"]'), `${name} no items button`).toBeNull();
+      expect(host.querySelector('.app-header [aria-label="Layers"]'), `${name} no layers button`).toBeNull();
     }
     const results = await axe.run(host);
     const violations = results.violations;

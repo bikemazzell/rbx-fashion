@@ -18,37 +18,6 @@ function strokeIcon(paths: readonly string[]): JSX.Element {
   );
 }
 
-export function IconAdd(): JSX.Element {
-  return strokeIcon(["M12 5v14", "M5 12h14"]);
-}
-
-export function IconMove(): JSX.Element {
-  return strokeIcon([
-    "M12 3v18",
-    "M3 12h18",
-    "m9 6 3-3 3 3",
-    "m9 18 3 3 3-3",
-    "m6 9-3 3 3 3",
-    "m18 9 3 3-3 3",
-  ]);
-}
-
-export function IconRepeat(): JSX.Element {
-  return strokeIcon(["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"]);
-}
-
-export function IconColor(): JSX.Element {
-  return strokeIcon(["M12 3s6 6.7 6 11a6 6 0 0 1-12 0c0-4.3 6-11 6-11z"]);
-}
-
-export function IconPreview(): JSX.Element {
-  return strokeIcon(["M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z", "M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"]);
-}
-
-export function IconExport(): JSX.Element {
-  return strokeIcon(["M12 4v11", "m8 11 4 4 4-4", "M5 20h14"]);
-}
-
 export function IconUndo(): JSX.Element {
   return strokeIcon(["M9 14 4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H10"]);
 }

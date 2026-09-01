@@ -56,10 +56,15 @@ test("generate affordances are hidden when no proxy URL is configured", async ()
   const host = mountApp();
   expect(hasText(host, "Parent Settings")).toBe(false);
   (requireEl(host.querySelector('[aria-label="T-Shirt"]'), "t-shirt card") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
-  (requireEl(host.querySelector('.toolbar [aria-label="Add"]'), "add tool") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
+  (requireEl(host.querySelector('[aria-label="Layers"]'), "layers button") as HTMLButtonElement).click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Add"]') !== null,
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null,
+    "layers sheet",
+  );
+  (requireEl(host.querySelector('[aria-label="Add Layer"]'), "add layer button") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null,
     "add sheet",
   );
   expect(hasText(host, "Generate a Pattern")).toBe(false);

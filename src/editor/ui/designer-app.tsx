@@ -32,7 +32,8 @@ import {
   composeFailureMessage,
 } from "./text";
 
-type SheetKind = null | "add" | "color" | "cutout-shape" | "items" | "more" | "question" | "disclaimer" | "generate";
+type SheetKind = null | "add" | "color" | "cutout-shape" | "layers" | "more" | "question" | "disclaimer" | "generate";
+type ColorIntent = { kind: "add" } | { kind: "edit"; id: string };
 
 interface PendingRaster {
   assetId: string;
@@ -117,6 +118,7 @@ export function DesignerApp() {
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
   const [drawingCutoutShape, setDrawingCutoutShape] = useState<CutoutShape | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [colorIntent, setColorIntent] = useState<ColorIntent | null>(null);
   const [pendingStart, setPendingStart] = useState<PendingStart | null>(null);
   const [pendingRaster, setPendingRaster] = useState<PendingRaster | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -227,6 +229,7 @@ export function DesignerApp() {
 
   const resetTransient = () => {
     setSheet(null);
+    setColorIntent(null);
     setPendingStart(null);
     setPendingRaster(null);
     setNotice(null);
@@ -348,11 +351,34 @@ export function DesignerApp() {
   };
 
   const onSwatch = (color: string) => {
-    if (selectedLayer !== null && selectedLayer.kind === "solid") {
-      apply({ type: "set-color", id: selectedLayer.id, color });
-    } else {
+    const intent = colorIntent;
+    if (intent?.kind === "add") {
       addSolid(color);
+    } else if (intent?.kind === "edit") {
+      const current = sessionRef.current;
+      const target = current?.document.layers.find((layer) => layer.id === intent.id);
+      if (target?.kind === "solid") {
+        apply({ type: "set-color", id: intent.id, color });
+      }
     }
+    setColorIntent(null);
+    setSheet(null);
+  };
+
+  const chooseNewColor = () => {
+    setDrawingCutoutShape(null);
+    setColorIntent({ kind: "add" });
+    setSheet("color");
+  };
+
+  const changeSelectedColor = () => {
+    if (selectedLayer?.kind !== "solid") return;
+    setColorIntent({ kind: "edit", id: selectedLayer.id });
+    setSheet("color");
+  };
+
+  const closeSheet = () => {
+    setColorIntent(null);
     setSheet(null);
   };
 
@@ -374,11 +400,6 @@ export function DesignerApp() {
       return;
     }
     if (outcome.route === "add-item") {
-      if (captured.document.layers.length >= LIMITS.MAX_LAYERS) {
-        assets.remove(outcome.asset.id);
-        setNotice(ITEM_CAP_MESSAGE);
-        return;
-      }
       const template = getTemplate(captured.document.garmentType);
       const item: ItemSpec = {
         kind: "raster",
@@ -583,26 +604,16 @@ export function DesignerApp() {
     commitIfChanged(current, dispatch(next, { type: "commit-gesture" }));
   };
 
-  const onRepeatToolbar = () => {
-    onPlacement("pattern");
-  };
-
-  const onToolbar = (tool: "add" | "move" | "repeat" | "color" | "preview" | "export") => {
+  const openAddLayer = () => {
+    const current = sessionRef.current;
+    if (current === null) return;
     setDrawingCutoutShape(null);
-    if (tool === "add") {
-      setSheet("add");
-    } else if (tool === "move") {
-      setSheet(null);
-      setActiveTab("edit");
-    } else if (tool === "repeat") {
-      onRepeatToolbar();
-    } else if (tool === "color") {
-      setSheet("color");
-    } else if (tool === "preview") {
-      setActiveTab("preview");
-    } else {
-      void onExport();
+    setColorIntent(null);
+    if (current.document.layers.length >= LIMITS.MAX_LAYERS) {
+      setNotice(ITEM_CAP_MESSAGE);
+      return;
     }
+    setSheet("add");
   };
 
   const onRename = (id: string, name: string) => {
@@ -849,13 +860,13 @@ export function DesignerApp() {
         onNew={onNew}
         onSave={() => void onSave()}
         onOpen={requestOpen}
+        onExport={() => void onExport()}
         onUndo={() => apply({ type: "undo" })}
         onRedo={() => apply({ type: "redo" })}
         onTabChange={(tab) => {
           setDrawingCutoutShape(null);
           setActiveTab(tab);
         }}
-        onToolbar={onToolbar}
         onPlacement={onPlacement}
         onComposeError={handleComposeError}
         getSession={() => sessionRef.current ?? session}
@@ -875,13 +886,17 @@ export function DesignerApp() {
         onCancelCutout={() => setDrawingCutoutShape(null)}
         onFile={handleFile}
         onSwatch={onSwatch}
+        onChooseNewColor={chooseNewColor}
+        onChangeColor={changeSelectedColor}
         generateEnabled={generateEnabled}
         onGenerateFromAdd={onGenerateFromAdd}
         onGeneratePattern={onGeneratePattern}
           onAnswerGarment={answerGarment}
           onCancelQuestion={cancelQuestion}
-          onCloseSheet={() => setSheet(null)}
-          onOpenItems={() => setSheet("items")}
+          onCloseSheet={closeSheet}
+          addLayerDisabled={session.document.layers.length >= LIMITS.MAX_LAYERS}
+          onAddLayer={openAddLayer}
+          onOpenLayers={() => setSheet("layers")}
           onOpenMore={() => setSheet("more")}
           onConfirmPendingStart={confirmPendingStart}
           onCancelPendingStart={cancelPendingStart}

@@ -85,16 +85,21 @@ function dialog(host: HTMLElement, label: string): HTMLElement {
 
 async function startEditing(host: HTMLElement, garment: string): Promise<void> {
   (byLabel(host, garment) as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
 }
 
 async function openAddSheet(host: HTMLElement): Promise<HTMLElement> {
-  (requireEl(host.querySelector('.toolbar [aria-label="Add"]'), "add tool") as HTMLButtonElement).click();
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Add"]') !== null,
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null,
+    "layers sheet",
+  );
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(
+    () => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null,
     "add sheet",
   );
-  return dialog(host, "Add");
+  return dialog(host, "Add Layer");
 }
 
 async function openGenerateSheet(host: HTMLElement): Promise<HTMLElement> {
@@ -146,19 +151,19 @@ async function saveKeyViaParentSettings(host: HTMLElement, key: string): Promise
 }
 
 async function itemCount(host: HTMLElement): Promise<number> {
-  (byLabel(host, "Items") as HTMLButtonElement).click();
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Items"]') !== null,
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null,
     "items sheet",
   );
-  const rows = host.querySelectorAll('[role="dialog"][aria-label="Items"] .item-row');
+  const rows = host.querySelectorAll('[role="dialog"][aria-label="Layers"] .item-row');
   const done = requireEl(
-    host.querySelector('[role="dialog"][aria-label="Items"] [aria-label="Done"]'),
+    host.querySelector('[role="dialog"][aria-label="Layers"] [aria-label="Done"]'),
     "done",
   ) as HTMLButtonElement;
   done.click();
   await waitFor(
-    () => host.querySelector('[role="dialog"][aria-label="Items"]') === null,
+    () => host.querySelector('[role="dialog"][aria-label="Layers"]') === null,
     "items sheet closes",
   );
   return rows.length;
@@ -267,7 +272,7 @@ test("generate without a saved key shows the parent setup notice and makes no ca
     () => statusText(host).includes(GENERATE_PARENT_SETUP_MESSAGE),
     "parent setup notice",
   );
-  expect(host.querySelector('[role="dialog"][aria-label="Add"]')).not.toBeNull();
+  expect(host.querySelector('[role="dialog"][aria-label="Add Layer"]')).not.toBeNull();
   expect(h.generatePattern).not.toHaveBeenCalled();
   expect(await itemCount(host)).toBe(0);
 });

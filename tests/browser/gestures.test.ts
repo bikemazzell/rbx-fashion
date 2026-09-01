@@ -84,7 +84,14 @@ async function chooseCutoutShape(host: HTMLElement, shape: "Rectangle" | "Oval")
 
 async function startEditing(host: HTMLElement, garment: string): Promise<void> {
   (byLabel(host, garment) as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
+}
+
+async function openAddSheet(host: HTMLElement): Promise<void> {
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null, "layers sheet");
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
 }
 
 async function pngFile(width: number, height: number): Promise<File> {
@@ -105,10 +112,9 @@ async function pngFile(width: number, height: number): Promise<File> {
 
 async function importSticker(host: HTMLElement): Promise<void> {
   const file = await pngFile(400, 300);
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   const input = requireEl(
-    host.querySelector('[role="dialog"][aria-label="Add"] input[type="file"]'),
+    host.querySelector('[role="dialog"][aria-label="Add Layer"] input[type="file"]'),
     "file input",
   ) as HTMLInputElement;
   const transfer = new DataTransfer();
@@ -177,7 +183,8 @@ async function openMore(host: HTMLElement): Promise<void> {
 }
 
 async function addColor(host: HTMLElement, swatchIndex: number): Promise<void> {
-  (byLabel(host, "Color") as HTMLButtonElement).click();
+  await openAddSheet(host);
+  (byLabel(host, "Choose Color") as HTMLButtonElement).click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null,
     "color sheet",
@@ -267,8 +274,7 @@ test("full-map and oversized artwork handles stay inside the clothing canvas", (
 test("Add Cut Out draws one selected rectangle and a tap creates a useful default", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Rectangle");
 
   const start = canvasToScreen(host, 120, 100);
@@ -290,8 +296,7 @@ test("Add Cut Out draws one selected rectangle and a tap creates a useful defaul
   expect(host.querySelector('[role="dialog"][aria-label="More"] [aria-label="Tall"]')).toBeNull();
   (byLabel(host, "Done") as HTMLButtonElement).click();
 
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet again");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Rectangle");
   const tap = canvasToScreen(host, 450, 400);
   pointer(host, "pointerdown", 1, tap.x, tap.y);
@@ -311,8 +316,7 @@ test("Oval Cut Out draws an ellipse, preserves its painted corners, and names th
   setMoreField(host, "Up/Down", "138");
   (byLabel(host, "Done") as HTMLButtonElement).click();
   await waitFor(() => host.querySelector('[role="dialog"][aria-label="More"]') === null, "color More closes");
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Oval");
 
   const start = canvasToScreen(host, 250, 100);
@@ -373,8 +377,7 @@ test("color rectangle Size commits uniformly in pixels and undoes in one step", 
 test("Escape during an active cutout drag discards it even after pointer-up", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Rectangle");
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   const start = canvasToScreen(host, 100, 100);
@@ -392,8 +395,7 @@ test("Escape during an active cutout drag discards it even after pointer-up", as
 test("pointer cancellation leaves no Cut Out draft or drawing mode active", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Oval");
   const start = canvasToScreen(host, 250, 100);
   const end = canvasToScreen(host, 340, 180);
@@ -419,8 +421,7 @@ test("pointer cancellation leaves no Cut Out draft or drawing mode active", asyn
 test("starting a new Cut Out after cancelling a drag discards the stale pointer", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Rectangle");
   const first = canvasToScreen(host, 100, 100);
   const firstEnd = canvasToScreen(host, 220, 220);
@@ -430,8 +431,7 @@ test("starting a new Cut Out after cancelling a drag discards the stale pointer"
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   await waitFor(() => host.querySelector(".cutout-instruction") === null, "first draw mode cancels");
 
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "second add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Oval");
   const second = canvasToScreen(host, 250, 100);
   pointer(host, "pointerdown", 2, second.x, second.y);
@@ -445,8 +445,7 @@ test("wheel and keyboard transforms are ignored while drawing a cutout", async (
   const host = mountApp();
   await startEditing(host, "T-Shirt");
   await importSticker(host);
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Rectangle");
   const center = canvasToScreen(host, 256, 256);
   overlayEl(host).dispatchEvent(new WheelEvent("wheel", { deltaY: -100, clientX: center.x, clientY: center.y, cancelable: true, bubbles: true }));
@@ -679,7 +678,7 @@ test("pointercancel mid-drag rolls back without committing", async () => {
   clickUndo(host);
   await waitFor(() => host.querySelector(".segmented") === null, "no history entry from the canceled drag");
   (byLabel(host, "Redo") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "item restored");
+  await waitFor(() => host.querySelector(".app-header") !== null, "item restored");
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
   const reselect = liveCanvasToScreen(host, 256, 256);
@@ -822,8 +821,7 @@ test("color rectangles show side handles on the overlay and drag as one undo ste
 test("cutouts show side handles on the selection overlay", async () => {
   const host = mountApp();
   await startEditing(host, "Shirt");
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   await chooseCutoutShape(host, "Rectangle");
   const start = canvasToScreen(host, 120, 100);
   const end = canvasToScreen(host, 360, 280);
@@ -904,7 +902,7 @@ test("every pointerdown is captured so an off-overlay lift still drains the poin
   await waitFor(() => host.querySelector(".segmented") === null, "takeover added no history entry");
 
   (byLabel(host, "Redo") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "item restored");
+  await waitFor(() => host.querySelector(".app-header") !== null, "item restored");
   const reselect = liveCanvasToScreen(host, 256, 256);
   pointer(host, "pointerdown", 1, reselect.x, reselect.y);
   pointer(host, "pointerup", 1, reselect.x, reselect.y);

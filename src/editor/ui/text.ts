@@ -15,7 +15,7 @@ export const PALETTE: readonly { name: string; color: string }[] = [
   { name: "White", color: "#ffffff" },
 ];
 
-export const ITEM_CAP_MESSAGE = `You already have ${LIMITS.MAX_LAYERS} items. Delete one to add another.`;
+export const ITEM_CAP_MESSAGE = `You already have ${LIMITS.MAX_LAYERS} layers. Delete one to add another.`;
 
 export const EXPORT_FAILED_MESSAGE = "Something went wrong. Try again.";
 

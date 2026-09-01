@@ -4,6 +4,8 @@ import { IconDown, IconDuplicate, IconEye, IconEyeOff, IconTrash, IconUp } from 
 export interface ItemsPanelProps {
   layersTopFirst: readonly Layer[];
   selectedItemId: string | null;
+  addDisabled: boolean;
+  onAddLayer: () => void;
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onToggleVisibility: (id: string) => void;
@@ -18,12 +20,22 @@ function renameHandler(props: ItemsPanelProps, layer: Layer, value: string): voi
 
 export function ItemsPanel(props: ItemsPanelProps) {
   const count = props.layersTopFirst.length;
-  if (count === 0) {
-    return <p class="items-empty">No items yet. Tap Add to begin.</p>;
-  }
   return (
-    <ul class="items-list">
-      {props.layersTopFirst.map((layer, displayIndex) => {
+    <>
+      <button
+        type="button"
+        class="add-layer-button primary"
+        aria-label="Add Layer"
+        disabled={props.addDisabled}
+        aria-disabled={props.addDisabled ? "true" : "false"}
+        onClick={props.onAddLayer}
+      >
+        + Add Layer
+      </button>
+      {count === 0 ? (
+        <p class="items-empty">No layers yet. Choose Add Layer to begin.</p>
+      ) : <ul class="items-list">
+        {props.layersTopFirst.map((layer, displayIndex) => {
         const zIndex = count - 1 - displayIndex;
         const layerAbove = props.layersTopFirst[displayIndex - 1];
         const upDisabled = zIndex === count - 1 || layerAbove?.kind === "cutout";
@@ -41,7 +53,7 @@ export function ItemsPanel(props: ItemsPanelProps) {
               key={`${layer.id}:${layer.name}`}
               type="text"
               defaultValue={layer.name}
-              aria-label="Item name"
+              aria-label="Layer name"
               onBlur={(event) => renameHandler(props, layer, event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -62,7 +74,7 @@ export function ItemsPanel(props: ItemsPanelProps) {
             <button
               type="button"
               class="item-tool item-tool-copy"
-              aria-label="Copy item"
+              aria-label="Copy layer"
               onClick={() => props.onDuplicate(layer.id)}
             >
               <IconDuplicate />
@@ -102,7 +114,8 @@ export function ItemsPanel(props: ItemsPanelProps) {
             </button>
           </li>
         );
-      })}
-    </ul>
+        })}
+      </ul>}
+    </>
   );
 }

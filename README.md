@@ -6,10 +6,10 @@ Lean, mobile-first editor for designing Roblox classic clothing (shirt/pants tem
 
 - Start with T-Shirt for a front-only picture, Shirt for body-and-arm wrapping, or Pants for waist-and-leg wrapping. Open Saved Project reopens a local `.rbxcloth.zip` without starting a new garment.
 - In Edit, drag a selected picture to move it, use its cyan handle to resize, its white handle to rotate, or use the mouse wheel/trackpad over the picture to resize it.
-- Choose Color (or Add → Choose Color) to drop a color rectangle in the middle of the clothing: drag it to move, drag a side handle to stretch one edge, use the cyan handle to resize proportionally, or the white handle to rotate. Picking another swatch while it is selected just recolors it.
-- To make part of the clothing see-through, choose **Add → Cut Out**, then choose Rectangle or Oval and drag the shape. A tap creates a useful default rectangle or circle. Move it, stretch it by dragging a side handle, resize it with the cyan handle, rotate it with the white handle, or fine-tune it in More. The checkerboard marks transparent pixels.
+- Open Layers and choose Add Layer → Choose Color to drop a new color rectangle in the middle of the clothing. Drag it to move, drag a side handle to stretch one edge, use the cyan handle to resize proportionally, or the white handle to rotate. To recolor that patch, select it and use More → Change Color.
+- To make part of the clothing see-through, open **Layers → Add Layer → Cut Out**, then choose Rectangle or Oval and drag the shape. A tap creates a useful default rectangle or circle. Move it, stretch it by dragging a side handle, resize it with the cyan handle, rotate it with the white handle, or fine-tune it in More. The checkerboard marks transparent pixels.
 - In Preview, drag to rotate the avatar and pinch or use the mouse wheel/trackpad to zoom. Reset restores the default view.
-- Save downloads an editable `.rbxcloth.zip`; Export downloads the Roblox-sized PNG. The app stores neither file nor API key after the browser session ends.
+- New, Open, Save, and Export sit together in the header. Save downloads an editable `.rbxcloth.zip`; Export downloads the Roblox-sized PNG. The app stores neither file nor API key after the browser session ends.
 
 ## Development
 

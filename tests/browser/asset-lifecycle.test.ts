@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from "vitest";
 import { mountDesignerApp, unmountDesignerApp } from "../../src/editor/ui/mount";
-import { ITEM_CAP_MESSAGE } from "../../src/editor/ui/text";
 import "../../src/styles.css";
 
 let hosts: HTMLElement[] = [];
@@ -93,14 +92,20 @@ async function pngFile(width: number, height: number): Promise<File> {
 
 async function startEditing(host: HTMLElement, garment: string): Promise<void> {
   (byLabel(host, garment) as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector(".toolbar") !== null, "editor to mount");
+  await waitFor(() => host.querySelector(".app-header") !== null, "editor to mount");
+}
+
+async function openAddSheet(host: HTMLElement): Promise<void> {
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null, "layers sheet");
+  (byLabel(host, "Add Layer") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add Layer"]') !== null, "add layer sheet");
 }
 
 async function choosePicture(host: HTMLElement, file: File): Promise<void> {
-  (byLabel(host, "Add") as HTMLButtonElement).click();
-  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await openAddSheet(host);
   const input = requireEl(
-    host.querySelector('[role="dialog"][aria-label="Add"] input[type="file"]'),
+    host.querySelector('[role="dialog"][aria-label="Add Layer"] input[type="file"]'),
     "file input",
   ) as HTMLInputElement;
   const transfer = new DataTransfer();
@@ -143,7 +148,8 @@ function byText(host: HTMLElement, text: string): HTMLButtonElement {
 }
 
 async function addColor(host: HTMLElement): Promise<void> {
-  byLabel(host, "Color").click();
+  await openAddSheet(host);
+  byLabel(host, "Choose Color").click();
   await waitFor(
     () => host.querySelector('[role="dialog"][aria-label="Colors"]') !== null,
     "color sheet",
@@ -190,32 +196,25 @@ test("cancelling the unsaved dialog over a dirty question closes the dead sheet 
   }
 }, 15000);
 
-test("a cap-rejected picture import closes the orphaned bitmaps and keeps the cap message", async () => {
+test("the layer cap disables Add Layer before another picture can be decoded", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
   await choosePicture(host, await pngFile(400, 300));
   await waitFor(() => host.querySelector(".selection-bar") !== null, "first picture lands");
   for (let index = 0; index < 7; index += 1) {
-    (byLabel(host, "Items") as HTMLButtonElement).click();
-    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Items"]') !== null, "items sheet");
-    const duplicates = host.querySelectorAll('[aria-label="Copy item"]');
+    (byLabel(host, "Layers") as HTMLButtonElement).click();
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null, "items sheet");
+    const duplicates = host.querySelectorAll('[aria-label="Copy layer"]');
     (duplicates[0] as HTMLButtonElement).click();
     await waitFor(() => host.querySelectorAll(".item-row").length === index + 2, "duplicate lands");
     byLabel(host, "Done").click();
-    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Items"]') === null, "items close");
+    await waitFor(() => host.querySelector('[role="dialog"][aria-label="Layers"]') === null, "items close");
   }
-  const tracker = trackBitmaps();
-  try {
-    await choosePicture(host, await pngFile(400, 300));
-    await waitFor(
-      () => (host.querySelector('[role="status"]')?.textContent ?? "").includes(ITEM_CAP_MESSAGE),
-      "cap message",
-    );
-    expect(tracker.records.length).toBeGreaterThanOrEqual(2);
-    for (const record of tracker.records) {
-      expect(record.closed).toBe(true);
-    }
-  } finally {
-    tracker.restore();
-  }
+  (byLabel(host, "Layers") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Layers"]') !== null, "layers sheet");
+  const addLayer = byLabel(host, "Add Layer") as HTMLButtonElement;
+  expect(addLayer.disabled).toBe(true);
+  expect(addLayer.getAttribute("aria-disabled")).toBe("true");
+  addLayer.click();
+  expect(host.querySelector('[role="dialog"][aria-label="Add Layer"]')).toBeNull();
 }, 30000);

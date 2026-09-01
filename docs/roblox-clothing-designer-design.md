@@ -32,7 +32,7 @@ Support:
 
 A 512×512 Roblox-map import opens as a T-shirt. A 585×559 import asks whether it is a Shirt or Pants because dimensions cannot distinguish them. Other images are added to the already selected garment.
 
-Choosing another garment while a project is open always starts a new project behind the existing unsaved-work confirmation. It never converts or silently reinterprets the current Items.
+Choosing another garment while a project is open always starts a new project behind the existing unsaved-work confirmation. It never converts or silently reinterprets the current layers.
 
 ### Child-facing editing model
 
@@ -44,9 +44,9 @@ Use friendly labels while retaining precise internal placement types:
 | Repeat | `pattern` | Repeat the image automatically across the garment. |
 | Fill Clothing | `full-map` | Scale the image to fill the complete Roblox map. |
 
-Choosing a color creates a centered color-rectangle item at 40% of the canvas width and 30% of its height. The child drags it, stretches one side via its side handles, resizes it proportionally, and rotates it like any picture; picking another swatch with it selected only recolors it. Previously saved full-clothing color items keep their coverage, remain recolor-only, and stay non-directly-transformable.
+Choosing Add Layer → Choose Color creates a new centered color-rectangle layer at 40% of the canvas width and 30% of its height, even when another color is selected. The child drags it, stretches one side via its side handles, resizes it proportionally, and rotates it like any picture. More → Change Color recolors the selected color layer without adding another. Previously saved full-clothing color layers keep their coverage, remain recolorable through More, and stay non-directly-transformable.
 
-The editor supports at most eight layers. Call them “Items” in the interface. Each item supports:
+The editor supports at most eight layers and calls them “Layers” in the interface. Add Layer is disabled once the limit is reached. Each layer supports:
 
 - Rename, reorder, duplicate, show/hide, and delete.
 - Move, uniform scale, rotate, and opacity.
@@ -60,14 +60,14 @@ Fifty in-memory undo/redo states are available. One drag, pinch, rotation, crop,
 
 ### Responsive interface
 
-- Mobile portrait and coarse-pointer tablets: one full-screen workspace with 2D and Preview tabs, a small bottom toolbar, and Items/More controls in sheets.
+- Mobile portrait and coarse-pointer tablets: one full-screen workspace with 2D and Preview tabs, Layers in a sheet, and contextual More controls.
 - Mobile landscape at 700 CSS pixels or wider: 2D and preview panes side by side.
-- Desktop with a fine pointer and sufficient width: side-by-side panes with a persistent Items/controls rail.
+- Desktop with a fine pointer and sufficient width: side-by-side panes with a persistent Layers rail.
 - 2D gestures: one finger manipulates the selected item; two fingers pan/zoom the canvas.
 - Preview gestures: one finger rotates the avatar; pinch zooms; Reset returns to the default view.
 - Numeric controls remain available for precision and keyboard accessibility.
 
-The primary toolbar is limited to Add, Move, Repeat, Color, Preview, and Export. A compact header provides Undo and Redo with disabled states when unavailable. Crop, independent scaling, opacity, item ordering, and project save/open live in secondary sheets rather than the main canvas.
+The editor has no global mode toolbar. Its compact two-row header contains the project name, Undo, Redo, Layers when the rail is not persistent, and one adjacent New/Open/Save/Export group. Add Layer lives at the top of Layers; Repeat is a placement choice for selected pictures; Preview remains in the portrait View tabs. Crop, independent scaling, opacity, recoloring, and layer ordering live in contextual sheets rather than the main canvas.
 
 ### Preview
 
@@ -85,7 +85,7 @@ AI generation is experimental and parent-configured. It is never required to use
 - Put Gemini key entry and Forget Key in a clearly labelled Parent Settings sheet.
 - Keep a directly entered key in memory only until reload, tab close, or Forget Key.
 - Once enabled, the child sees a prompt, a few example pattern ideas, Generate, and Cancel—no model or API controls.
-- Generated images enter the editor as ordinary Repeat items and retain their prompt in the local project file.
+- Generated images enter the editor as ordinary Repeat layers and retain their prompt in the local project file.
 - If the proxy, key, network, quota, or provider fails, only Generate is unavailable.
 
 The browser calls the configured proxy with:
@@ -218,7 +218,7 @@ Use the exact crop and center-pivot Canvas transform semantics in the technical 
 - Repeat enumerates source tiles in internal garment space and clips them across the official panels, preserving continuity across declared atlas seams.
 - Fill Clothing maps the source over the complete canonical canvas. A canonical-size Roblox map defaults to scale 1; another source defaults to fit the canvas.
 - A repeated solid color uses direct clipped fills rather than enumerating 1×1 tiles.
-- A decal solid color draws one garment-clipped rectangle at its transformed position and size; choosing a swatch creates this item. Saved full-clothing solid items keep the direct clipped fill and render unchanged.
+- A decal solid color draws one garment-clipped rectangle at its transformed position and size; choosing a swatch creates this layer. Saved full-clothing solid layers keep the direct clipped fill and render unchanged.
 - Visible rectangular cutouts run after every paint layer using Canvas `destination-out`. Their clear interior is alpha 0; rotated edges may contain antialiasing alpha. The checkerboard, draft, outline, and handles are editor-only UI and never enter the compositor.
 
 For raster patterns, allow at most 4,096 tile draws for one layer and 16,384 for one composition. If exceeded, show “Pattern is too small—make it larger” and block export until corrected.
@@ -267,7 +267,7 @@ Each stage must produce a usable vertical slice. AI and 3D preview failures neve
 Automated tests cover:
 
 - Garment dimensions, exact atlas registry values, crop math, transform order, layer order, Sticker/Repeat/Fill behavior, tiling limits, and automatic panel clipping.
-- Dimension-based import routing for T-shirt, Shirt/Pants choice, and ordinary current-project images; choosing a new garment resets rather than reinterprets Items.
+- Dimension-based import routing for T-shirt, Shirt/Pants choice, and ordinary current-project images; choosing a new garment resets rather than reinterprets layers.
 - Eight-layer limit, 50-step history, visible Undo/Redo states, one-step gestures, dirty state, and transactional failures.
 - PNG/JPEG/WebP normalization, orientation fixtures, size/pixel limits, and normalized PNG round-trip.
 - ZIP round-trip, symmetric save/open size limits, schema rejection, zip-slip protection, entry/byte limits, hashes, and unchanged current state after failure.

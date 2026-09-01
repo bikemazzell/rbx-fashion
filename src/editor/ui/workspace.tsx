@@ -426,7 +426,7 @@ export function Workspace(props: WorkspaceProps) {
         </div>
       )}
       {props.document.layers.length === 0 && (
-        <p class="workspace-empty">Tap Add to add a picture or color.</p>
+        <p class="workspace-empty">Open Layers to add a picture, color, or cutout.</p>
       )}
       <canvas
         class="workspace-canvas"

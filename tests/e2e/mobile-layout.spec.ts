@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("phone landscape mounts both editors without pushing tools below the viewport", async ({ page }) => {
+test("phone landscape mounts both editors without pushing controls below the viewport", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
@@ -10,8 +10,16 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
 
   await expect(page.locator(".workspace-stage")).toBeVisible();
   await expect(page.locator(".preview-stage")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Tools" })).toBeVisible();
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Tools" })).toHaveCount(0);
+  const projectFiles = page.getByRole("navigation", { name: "Project files" });
+  await expect(projectFiles).toBeVisible();
+  const saveBox = await projectFiles.getByRole("button", { name: "Save", exact: true }).boundingBox();
+  const exportBox = await projectFiles.getByRole("button", { name: "Export", exact: true }).boundingBox();
+  if (saveBox === null || exportBox === null) throw new Error("file buttons are missing");
+  expect(exportBox.x).toBeGreaterThan(saveBox.x);
+  expect(exportBox.x - (saveBox.x + saveBox.width)).toBeLessThanOrEqual(8);
+  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await page.getByRole("button", { name: "Add Layer", exact: true }).click();
   await page.getByRole("button", { name: "Cut Out", exact: true }).click();
   await page.getByRole("button", { name: "Oval", exact: true }).click();
   const overlay = page.locator(".workspace-overlay");
@@ -37,13 +45,11 @@ test("phone landscape mounts both editors without pushing tools below the viewpo
       bodyHeight: document.body.scrollHeight,
       workspace: rect(".workspace-stage"),
       preview: rect(".preview-stage"),
-      toolbar: rect(".toolbar"),
     };
   });
 
   expect(layout.workspace.height).toBeGreaterThan(80);
   expect(layout.preview.height).toBeGreaterThan(80);
-  expect(layout.toolbar.bottom).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(layout.documentHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(layout.bodyHeight).toBeLessThanOrEqual(layout.viewportHeight + 1);
   expect(pageErrors.filter((message) => message.includes("ResizeObserver loop"))).toEqual([]);
@@ -71,13 +77,16 @@ test("compact color and cutout More sheets do not create nested scrolling in pho
     expect(metrics.formOverflowY).not.toMatch(/auto|scroll/);
   };
 
-  await page.getByRole("button", { name: "Color", exact: true }).click();
+  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await page.getByRole("button", { name: "Add Layer", exact: true }).click();
+  await page.getByRole("button", { name: "Choose Color", exact: true }).click();
   await page.getByRole("button", { name: "Red", exact: true }).click();
   await page.getByRole("button", { name: "More", exact: true }).click();
   await expectCompactMoreFits();
   await page.getByRole("button", { name: "Done", exact: true }).click();
 
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await page.getByRole("button", { name: "Add Layer", exact: true }).click();
   await page.getByRole("button", { name: "Cut Out", exact: true }).click();
   await page.getByRole("button", { name: "Rectangle", exact: true }).click();
   const overlay = page.locator(".workspace-overlay");
