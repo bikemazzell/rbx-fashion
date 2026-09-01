@@ -58,6 +58,7 @@ function validateDocument(doc: ProjectDocument, assets: AssetStore): void {
     if (layer.kind === "cutout") {
       const rect = layer.rect;
       if (
+        (layer.shape !== "rectangle" && layer.shape !== "ellipse") ||
         !Number.isFinite(rect.centerX) ||
         !Number.isFinite(rect.centerY) ||
         !Number.isFinite(rect.rotationDeg) ||
@@ -298,7 +299,13 @@ function eraseCutout(
   ctx.translate(layer.rect.centerX, layer.rect.centerY);
   ctx.rotate((layer.rect.rotationDeg * Math.PI) / 180);
   ctx.fillStyle = "#000000";
-  ctx.fillRect(-layer.rect.width / 2, -layer.rect.height / 2, layer.rect.width, layer.rect.height);
+  if (layer.shape === "ellipse") {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, layer.rect.width / 2, layer.rect.height / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillRect(-layer.rect.width / 2, -layer.rect.height / 2, layer.rect.width, layer.rect.height);
+  }
   ctx.restore();
 }
 

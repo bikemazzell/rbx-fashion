@@ -5,7 +5,7 @@ import { defaultTransform } from "../../src/compositor/math";
 import { getTemplate } from "../../src/domain/registry";
 import { createProject } from "../../src/domain/project";
 import { exportRobloxPng } from "../../src/project/export";
-import type { GarmentType, Layer, PlacementMode, ProjectDocument, Transform } from "../../src/domain/types";
+import type { CutoutShape, GarmentType, Layer, PlacementMode, ProjectDocument, Transform } from "../../src/domain/types";
 
 const MAGENTA: [number, number, number, number] = [255, 0, 255, 255];
 const CYAN: [number, number, number, number] = [0, 255, 255, 255];
@@ -76,12 +76,13 @@ function cutoutLayer(
   height: number,
   rotationDeg = 0,
   visible = true,
+  shape: CutoutShape = "rectangle",
 ): Layer {
   return {
     id,
     name: id,
     kind: "cutout",
-    shape: "rectangle",
+    shape,
     visible,
     rect: { centerX, centerY, width, height, rotationDeg },
   };
@@ -430,6 +431,49 @@ test("an arbitrary-angle cutout erases only points inside its rotated rectangle"
   expectTransparent(ctx, 256, 256);
   expectTransparent(ctx, 277, 277);
   expectPixel(ctx, 296, 256, [255, 0, 0, 255]);
+});
+
+test("an ellipse cutout clears its oval interior but preserves bounding-box corners", () => {
+  const doc = projectDoc("tshirt", [
+    solidLayer("base", "#ff0000", "full-map", transform({ positionX: 256, positionY: 256, scaleX: 512, scaleY: 512 })),
+    cutoutLayer("oval", 256, 256, 200, 100, 0, true, "ellipse"),
+  ]);
+  const ctx = ctx2d(composeProject({ document: doc, assets: new AssetStore() }).canvas);
+  expectTransparent(ctx, 256, 256);
+  expectTransparent(ctx, 350, 256);
+  expectTransparent(ctx, 256, 300);
+  expectPixel(ctx, 340, 290, [255, 0, 0, 255]);
+  expectPixel(ctx, 172, 222, [255, 0, 0, 255]);
+});
+
+test("a rotated ellipse follows its rotated axes and hidden ellipses do nothing", () => {
+  const base = solidLayer("base", "#ff0000", "full-map", transform({ positionX: 256, positionY: 256, scaleX: 512, scaleY: 512 }));
+  const rotated = projectDoc("tshirt", [
+    base,
+    cutoutLayer("oval", 256, 256, 180, 60, 90, true, "ellipse"),
+  ]);
+  const rotatedCtx = ctx2d(composeProject({ document: rotated, assets: new AssetStore() }).canvas);
+  expectTransparent(rotatedCtx, 256, 330);
+  expectPixel(rotatedCtx, 330, 256, [255, 0, 0, 255]);
+
+  const hidden = projectDoc("tshirt", [
+    base,
+    cutoutLayer("oval", 256, 256, 180, 60, 0, false, "ellipse"),
+  ]);
+  const hiddenCtx = ctx2d(composeProject({ document: hidden, assets: new AssetStore() }).canvas);
+  expectPixel(hiddenCtx, 256, 256, [255, 0, 0, 255]);
+});
+
+test("overlapping rectangle and ellipse cutouts erase their union", () => {
+  const doc = projectDoc("tshirt", [
+    solidLayer("base", "#ff0000", "full-map", transform({ positionX: 256, positionY: 256, scaleX: 512, scaleY: 512 })),
+    cutoutLayer("rect", 210, 256, 80, 80),
+    cutoutLayer("oval", 300, 256, 100, 60, 0, true, "ellipse"),
+  ]);
+  const ctx = ctx2d(composeProject({ document: doc, assets: new AssetStore() }).canvas);
+  expectTransparent(ctx, 210, 256);
+  expectTransparent(ctx, 300, 256);
+  expectPixel(ctx, 300, 290, [255, 0, 0, 255]);
 });
 
 test("a 4px tile pattern exceeds the per-layer budget and fails with the exact message", async () => {

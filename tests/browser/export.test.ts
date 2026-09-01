@@ -124,7 +124,7 @@ test("export preserves a partially transparent cutout in an exact-size RGBA PNG"
       id: "hole",
       name: "Cut Out 1",
       kind: "cutout",
-      shape: "rectangle",
+      shape: "ellipse",
       visible: true,
       rect: { centerX: 256, centerY: 256, width: 100, height: 80, rotationDeg: 0 },
     },
@@ -142,6 +142,7 @@ test("export preserves a partially transparent cutout in an exact-size RGBA PNG"
     const ctx = ctx2d(canvas);
     ctx.drawImage(bitmap, 0, 0);
     expect(ctx.getImageData(256, 256, 1, 1).data[3]).toBe(0);
+    expect(ctx.getImageData(300, 290, 1, 1).data[3]).toBe(255);
     expect(ctx.getImageData(10, 10, 1, 1).data[3]).toBe(255);
   } finally {
     bitmap.close();
