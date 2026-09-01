@@ -58,7 +58,7 @@ test.each([
 ] as const)("createProject(%s) uses default name %s", (type, name) => {
   const project = createProject(type);
   expect(project.format).toBe("rbx-fashion-project");
-  expect(project.schemaVersion).toBe(2);
+  expect(project.schemaVersion).toBe(3);
   expect(project.name).toBe(name);
   expect(project.garmentType).toBe(type);
   expect(project.layers).toEqual([]);

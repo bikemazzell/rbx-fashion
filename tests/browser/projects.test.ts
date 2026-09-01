@@ -231,7 +231,8 @@ async function garmentProject(
   const cutout: Layer = {
     id: "layer-3",
     name: "Cut Out 1",
-    kind: "cutout",
+        kind: "cutout",
+        shape: "rectangle",
     visible: true,
     rect: { centerX: project.garmentType === "tshirt" ? 256 : 292.5, centerY: project.garmentType === "tshirt" ? 256 : 279.5, width: 48, height: 36, rotationDeg: 12 },
   };

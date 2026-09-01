@@ -44,7 +44,7 @@ const cutoutRect: CutoutRect = {
   rotationDeg: 0,
 };
 
-const cutoutSpec = { kind: "cutout", rect: cutoutRect } as unknown as ItemSpec;
+const cutoutSpec = { kind: "cutout", shape: "ellipse", rect: cutoutRect } as unknown as ItemSpec;
 
 function makeIds(): () => string {
   let n = 0;
@@ -141,7 +141,7 @@ test("add-item solid rejects invalid rectangle transforms", () => {
   }
 });
 
-test("add-item creates a named cutout with copied rectangle geometry", () => {
+test("add-item creates a named shaped cutout with copied geometry", () => {
   const ids = makeIds();
   let session: EditorSession | undefined;
   expect(() => {
@@ -151,8 +151,9 @@ test("add-item creates a named cutout with copied rectangle geometry", () => {
   if (session === undefined) return;
   expect(cutoutAt(session, 0)).toEqual({
     id: "layer-1",
-    name: "Cut Out 1",
+    name: "Oval Cut Out 1",
     kind: "cutout",
+    shape: "ellipse",
     visible: true,
     rect: cutoutRect,
   });
@@ -184,7 +185,8 @@ test("duplicate, visibility, rectangle patch, undo, and delete work for cutouts"
   const ids = makeIds();
   let session = add(createSession("pants"), cutoutSpec, ids);
   session = dispatch(session, { type: "duplicate-item", id: "layer-1" }, ids);
-  expect(cutoutAt(session, 1).name).toBe("Cut Out 2");
+  expect(cutoutAt(session, 1).name).toBe("Oval Cut Out 2");
+  expect(cutoutAt(session, 1).shape).toBe("ellipse");
   expect(cutoutAt(session, 1).rect).not.toBe(cutoutAt(session, 0).rect);
   session = dispatch(session, { type: "toggle-visibility", id: "layer-2" }, ids);
   expect(cutoutAt(session, 1).visible).toBe(false);
@@ -201,7 +203,21 @@ test("duplicate, visibility, rectangle patch, undo, and delete work for cutouts"
   const undone = dispatch(session, { type: "undo" }, ids);
   expect(cutoutAt(undone, 0).rect).toEqual(cutoutRect);
   const deleted = dispatch(session, { type: "delete-item", id: "layer-1" }, ids);
-  expect(deleted.document.layers.map((layer) => layer.name)).toEqual(["Cut Out 2"]);
+  expect(deleted.document.layers.map((layer) => layer.name)).toEqual(["Oval Cut Out 2"]);
+});
+
+test("rectangle and ellipse cutouts share one monotonic counter", () => {
+  const ids = makeIds();
+  let session = add(
+    createSession("shirt"),
+    { kind: "cutout", shape: "rectangle", rect: cutoutRect } as unknown as ItemSpec,
+    ids,
+  );
+  session = add(session, cutoutSpec, ids);
+  expect(session.document.layers.map((layer) => layer.name)).toEqual([
+    "Rectangle Cut Out 1",
+    "Oval Cut Out 2",
+  ]);
 });
 
 test("cutouts share the eight-item cap and reject invalid rectangle patches", () => {

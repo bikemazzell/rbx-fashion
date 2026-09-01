@@ -4,11 +4,13 @@ import { pngAssetFromBytes } from "../assets/store";
 import type { NormalizedPngAsset } from "../assets/store";
 import { sha256Hex } from "../assets/hash";
 import { LIMITS } from "../domain/types";
-import type { ProjectDocument, ProjectDocumentV1 } from "../domain/types";
+import type { ProjectDocument, ProjectDocumentV1, ProjectDocumentV2 } from "../domain/types";
 import {
   isValidProjectDocument,
   isValidProjectDocumentV1,
+  isValidProjectDocumentV2,
   migrateProjectDocumentV1,
+  migrateProjectDocumentV2,
 } from "../editor/state";
 import {
   OPEN_INVALID_MESSAGE,
@@ -233,8 +235,10 @@ export async function openProject(
   let document: ProjectDocument;
   if (record.schemaVersion === 1 && isValidProjectDocumentV1(parsed)) {
     document = migrateProjectDocumentV1(parsed as ProjectDocumentV1);
-  } else if (record.schemaVersion === 2 && isValidProjectDocument(parsed)) {
-    document = parsed;
+  } else if (record.schemaVersion === 2 && isValidProjectDocumentV2(parsed)) {
+    document = migrateProjectDocumentV2(parsed as ProjectDocumentV2);
+  } else if (record.schemaVersion === 3 && isValidProjectDocument(parsed)) {
+    document = parsed as ProjectDocument;
   } else {
     return invalidFailure();
   }

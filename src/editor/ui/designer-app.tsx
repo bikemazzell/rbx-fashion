@@ -775,7 +775,10 @@ export function DesignerApp() {
       setNotice(ITEM_CAP_MESSAGE);
       return;
     }
-    const next = dispatch(current, { type: "add-item", item: { kind: "cutout", rect } });
+    const next = dispatch(current, {
+      type: "add-item",
+      item: { kind: "cutout", shape: "rectangle", rect },
+    });
     if (commitIfChanged(current, next)) setSelectedItemId(topLayerId(next));
     setDrawingCutout(false);
   };

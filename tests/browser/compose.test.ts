@@ -81,6 +81,7 @@ function cutoutLayer(
     id,
     name: id,
     kind: "cutout",
+    shape: "rectangle",
     visible,
     rect: { centerX, centerY, width, height, rotationDeg },
   };

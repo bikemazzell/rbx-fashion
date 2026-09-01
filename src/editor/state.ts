@@ -3,12 +3,14 @@ import { LIMITS } from "../domain/types";
 import type {
   AssetManifestEntry,
   CutoutRect,
+  CutoutShape,
   GarmentType,
   Layer,
   PaintLayer,
   PlacementMode,
   ProjectDocument,
   ProjectDocumentV1,
+  ProjectDocumentV2,
   Transform,
 } from "../domain/types";
 import { isCropValid } from "../compositor/math";
@@ -20,7 +22,7 @@ export type TransformPatch = Partial<
 export type ItemSpec =
   | { kind: "solid"; color: string; transform: Transform }
   | { kind: "raster"; assetId: string; placement: PlacementMode; transform: Transform }
-  | { kind: "cutout"; rect: CutoutRect };
+  | { kind: "cutout"; shape: CutoutShape; rect: CutoutRect };
 
 export type CutoutRectPatch = Partial<CutoutRect>;
 
@@ -177,7 +179,15 @@ function isValidPaintLayerShape(value: unknown): value is PaintLayer {
   return typeof value.color === "string" && value.color.length > 0;
 }
 
-const CUTOUT_KEYS: ReadonlySet<string> = new Set(["id", "name", "kind", "visible", "rect"]);
+const CUTOUT_KEYS_V2: ReadonlySet<string> = new Set(["id", "name", "kind", "visible", "rect"]);
+const CUTOUT_KEYS_V3: ReadonlySet<string> = new Set([
+  "id",
+  "name",
+  "kind",
+  "visible",
+  "shape",
+  "rect",
+]);
 const CUTOUT_RECT_KEYS: ReadonlySet<string> = new Set([
   "centerX",
   "centerY",
@@ -186,13 +196,8 @@ const CUTOUT_RECT_KEYS: ReadonlySet<string> = new Set([
   "rotationDeg",
 ]);
 
-function isValidCutoutLayerShape(value: unknown): boolean {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, CUTOUT_KEYS) ||
-    !isRecord(value.rect) ||
-    !hasOnlyKeys(value.rect, CUTOUT_RECT_KEYS)
-  ) {
+function hasValidCutoutBase(value: Record<string, unknown>): boolean {
+  if (!isRecord(value.rect) || !hasOnlyKeys(value.rect, CUTOUT_RECT_KEYS)) {
     return false;
   }
   return (
@@ -208,6 +213,25 @@ function isValidCutoutLayerShape(value: unknown): boolean {
     isFiniteNumber(value.rect.height) &&
     value.rect.height > 0 &&
     isFiniteNumber(value.rect.rotationDeg)
+  );
+}
+
+function isValidCutoutLayerV2Shape(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, CUTOUT_KEYS_V2)
+  ) {
+    return false;
+  }
+  return hasValidCutoutBase(value);
+}
+
+function isValidCutoutLayerShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, CUTOUT_KEYS_V3) &&
+    (value.shape === "rectangle" || value.shape === "ellipse") &&
+    hasValidCutoutBase(value)
   );
 }
 
@@ -243,7 +267,7 @@ function isValidManifestEntryShape(value: unknown): boolean {
   return value.prompt === undefined || typeof value.prompt === "string";
 }
 
-function hasValidDocumentHeader(value: Record<string, unknown>, schemaVersion: 1 | 2): boolean {
+function hasValidDocumentHeader(value: Record<string, unknown>, schemaVersion: 1 | 2 | 3): boolean {
   return (
     value.format === "rbx-fashion-project" &&
     value.schemaVersion === schemaVersion &&
@@ -297,11 +321,48 @@ export function isValidProjectDocumentV1(value: unknown): value is ProjectDocume
 }
 
 export function migrateProjectDocumentV1(document: ProjectDocumentV1): ProjectDocument {
-  return { ...document, schemaVersion: 2, layers: document.layers.slice(), assets: document.assets.slice() };
+  return { ...document, schemaVersion: 3, layers: document.layers.slice(), assets: document.assets.slice() };
+}
+
+export function isValidProjectDocumentV2(value: unknown): value is ProjectDocumentV2 {
+  if (!isRecord(value) || !hasValidDocumentHeader(value, 2)) {
+    return false;
+  }
+  if (!Array.isArray(value.layers) || value.layers.length > LIMITS.MAX_LAYERS || !hasValidAssets(value)) {
+    return false;
+  }
+  const layerIds = new Set<string>();
+  const assetIds = new Set(
+    (value.assets as unknown[]).map((entry) => (entry as AssetManifestEntry).id),
+  );
+  let sawCutout = false;
+  for (const layer of value.layers) {
+    if (!isRecord(layer)) return false;
+    const valid = layer.kind === "cutout" ? isValidCutoutLayerV2Shape(layer) : isValidPaintLayerShape(layer);
+    if (!valid) return false;
+    if (layer.kind === "raster" && !assetIds.has(layer.assetId as string)) return false;
+    if (layer.kind === "cutout") sawCutout = true;
+    else if (sawCutout) return false;
+    const id = layer.id as string;
+    if (layerIds.has(id)) return false;
+    layerIds.add(id);
+  }
+  return true;
+}
+
+export function migrateProjectDocumentV2(document: ProjectDocumentV2): ProjectDocument {
+  return {
+    ...document,
+    schemaVersion: 3,
+    layers: document.layers.map((layer) =>
+      layer.kind === "cutout" ? { ...layer, shape: "rectangle" as const, rect: { ...layer.rect } } : layer,
+    ),
+    assets: document.assets.slice(),
+  };
 }
 
 export function isValidProjectDocument(value: unknown): value is ProjectDocument {
-  if (!isRecord(value) || !hasValidDocumentHeader(value, 2)) {
+  if (!isRecord(value) || !hasValidDocumentHeader(value, 3)) {
     return false;
   }
   if (!Array.isArray(value.layers) || value.layers.length > LIMITS.MAX_LAYERS || !hasValidAssets(value)) {
@@ -608,8 +669,9 @@ function addItem(
     const next: LayerCounters = { ...counters, cutout: counters.cutout + 1 };
     const layer: Layer = {
       id: idFactory(),
-      name: `Cut Out ${next.cutout}`,
+      name: `${item.shape === "ellipse" ? "Oval" : "Rectangle"} Cut Out ${next.cutout}`,
       kind: "cutout",
+      shape: item.shape,
       visible: true,
       rect: { ...item.rect },
     };
@@ -674,7 +736,7 @@ function duplicateItem(
     const copy: Layer = {
       ...source,
       id: idFactory(),
-      name: `Cut Out ${next.cutout}`,
+      name: `${source.shape === "ellipse" ? "Oval" : "Rectangle"} Cut Out ${next.cutout}`,
       rect: { ...source.rect },
     };
     return accepted({ ...doc, layers: [...doc.layers, copy] }, next);

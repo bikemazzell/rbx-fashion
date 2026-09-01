@@ -184,7 +184,7 @@ test("zip limit defaults are the real LIMITS constants", () => {
   expect(ZIP_LIMIT_DEFAULTS.entries).toBe(LIMITS.ZIP_MAX_ENTRIES);
 });
 
-test("open migrates an asset-free v1 project to the current v2 schema", async () => {
+test("open migrates an asset-free v1 project to the current v3 schema", async () => {
   const legacy = {
     format: "rbx-fashion-project",
     schemaVersion: 1,
@@ -197,20 +197,13 @@ test("open migrates an asset-free v1 project to the current v2 schema", async ()
   const result = await openProject(fileOf(assetFreeZip(legacy)));
   expect(result.ok).toBe(true);
   if (result.ok) {
-    expect(result.document).toEqual({ ...legacy, schemaVersion: 2 });
+    expect(result.document).toEqual({ ...legacy, schemaVersion: 3 });
     expect(result.assets).toEqual([]);
   }
 });
 
-test("an asset-free v2 project saves and reopens deterministically", async () => {
-  const document = {
-    format: "rbx-fashion-project" as const,
-    schemaVersion: 2 as const,
-    name: "Cutout Ready",
-    garmentType: "pants" as const,
-    layers: [],
-    assets: [],
-  };
+test("an asset-free v3 project saves and reopens deterministically", async () => {
+  const document = createProject("pants", "Cutout Ready");
 
   const first = await saveProject(document, () => {
     throw new Error("asset callback must not run");
@@ -232,10 +225,37 @@ test("an asset-free v2 project saves and reopens deterministically", async () =>
   }
 });
 
-test("open rejects unknown schemas and strict cutout hybrids", async () => {
-  const base = {
+test("open migrates v2 cutouts to rectangles without changing their data", async () => {
+  const cutout = {
+    id: "cutout-1",
+    name: "My old opening",
+    kind: "cutout",
+    visible: false,
+    rect: { centerX: 101, centerY: 99, width: 81, height: 61, rotationDeg: 17 },
+  };
+  const legacy = {
     format: "rbx-fashion-project",
     schemaVersion: 2,
+    name: "Legacy Cutout",
+    garmentType: "shirt",
+    layers: [solidLayer("base"), cutout],
+    assets: [],
+  };
+  const result = await openProject(fileOf(assetFreeZip(legacy)));
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.document.schemaVersion).toBe(3);
+    expect(result.document.layers).toEqual([
+      legacy.layers[0],
+      { ...cutout, shape: "rectangle" },
+    ]);
+  }
+});
+
+test("open rejects unknown schemas, unknown shapes, and strict v3 cutout hybrids", async () => {
+  const base = {
+    format: "rbx-fashion-project",
+    schemaVersion: 3,
     name: "Strict",
     garmentType: "shirt",
     layers: [
@@ -243,6 +263,7 @@ test("open rejects unknown schemas and strict cutout hybrids", async () => {
         id: "cutout-1",
         name: "Cut Out 1",
         kind: "cutout",
+        shape: "ellipse",
         visible: true,
         rect: { centerX: 100, centerY: 100, width: 80, height: 60, rotationDeg: 0 },
       },
@@ -251,6 +272,13 @@ test("open rejects unknown schemas and strict cutout hybrids", async () => {
   };
 
   expectInvalid(await openProject(fileOf(assetFreeZip({ ...base, schemaVersion: 99 }))));
+  expectInvalid(
+    await openProject(fileOf(assetFreeZip({ ...base, layers: [{ ...base.layers[0], shape: "triangle" }] }))),
+  );
+  const firstLayer = base.layers[0];
+  if (firstLayer === undefined) throw new Error("missing strict cutout fixture");
+  const { shape: _shape, ...missingShape } = firstLayer;
+  expectInvalid(await openProject(fileOf(assetFreeZip({ ...base, layers: [missingShape] }))));
   expectInvalid(
     await openProject(
       fileOf(assetFreeZip({ ...base, layers: [{ ...base.layers[0], opacity: 1 }] })),
@@ -273,7 +301,7 @@ test("open rejects unknown schemas and strict cutout hybrids", async () => {
   );
 });
 
-test("v2 validation rejects a raster layer without a matching manifest asset", () => {
+test("current validation rejects a raster layer without a matching manifest asset", () => {
   const document = createProject("shirt", "Missing");
   document.layers = [rasterLayer("layer-1", "missing")];
   expect(isValidProjectDocument(document)).toBe(false);
@@ -419,7 +447,7 @@ test("open rejects bad json, wrong format, wrong schema version, bad garment, an
   const document = createProject("tshirt", "Probe");
   const mutants: [string, unknown][] = [
     ["format", "rbx-fashion-projectX"],
-    ["schemaVersion", 3],
+    ["schemaVersion", 4],
     ["garmentType", "hat"],
   ];
   for (const [key, value] of mutants) {

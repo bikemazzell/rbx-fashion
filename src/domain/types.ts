@@ -45,9 +45,15 @@ export interface CutoutRect {
   rotationDeg: number;
 }
 
-export interface CutoutLayer extends LayerBase {
+export type CutoutShape = "rectangle" | "ellipse";
+
+export interface CutoutLayerV2 extends LayerBase {
   kind: "cutout";
   rect: CutoutRect;
+}
+
+export interface CutoutLayer extends CutoutLayerV2 {
+  shape: CutoutShape;
 }
 
 export type Layer = PaintLayer | CutoutLayer;
@@ -74,9 +80,18 @@ export interface ProjectDocumentV1 {
   assets: AssetManifestEntry[];
 }
 
-export interface ProjectDocument {
+export interface ProjectDocumentV2 {
   format: "rbx-fashion-project";
   schemaVersion: 2;
+  name: string;
+  garmentType: GarmentType;
+  layers: Array<PaintLayer | CutoutLayerV2>;
+  assets: AssetManifestEntry[];
+}
+
+export interface ProjectDocument {
+  format: "rbx-fashion-project";
+  schemaVersion: 3;
   name: string;
   garmentType: GarmentType;
   layers: Layer[];

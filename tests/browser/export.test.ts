@@ -124,6 +124,7 @@ test("export preserves a partially transparent cutout in an exact-size RGBA PNG"
       id: "hole",
       name: "Cut Out 1",
       kind: "cutout",
+      shape: "rectangle",
       visible: true,
       rect: { centerX: 256, centerY: 256, width: 100, height: 80, rotationDeg: 0 },
     },

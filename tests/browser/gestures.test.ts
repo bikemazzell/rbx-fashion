@@ -942,7 +942,8 @@ function createHarness(kind: "raster" | "cutout" | "solid" = "raster", rotationD
             ? {
                 id: "item-1",
                 name: "Cut Out 1",
-                kind: "cutout",
+          kind: "cutout",
+          shape: "rectangle",
                 visible: true,
                 rect: { centerX: 256, centerY: 256, width: 400, height: 300, rotationDeg },
               }
