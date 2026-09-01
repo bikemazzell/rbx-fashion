@@ -235,6 +235,7 @@ export interface GestureControllerOptions {
   cutoutShape?: () => CutoutShape | null;
   onCutoutDraft?: (rect: CutoutRect | null, shape: CutoutShape | null) => void;
   onCreateCutout?: (rect: CutoutRect, shape: CutoutShape) => void;
+  onCancelCutout?: () => void;
   canvasSize?: () => { width: number; height: number };
 }
 
@@ -658,8 +659,12 @@ export function createGestureController(options: GestureControllerOptions): { de
 
   const onPointerDown = (event: PointerEvent): void => {
     if (options.drawingCutout?.()) {
-      if (cutoutDraw !== null) return;
       const shape = options.cutoutShape?.() ?? "rectangle";
+      if (cutoutDraw !== null) {
+        if (cutoutDraw.shape === shape) return;
+        cutoutDraw = null;
+        options.onCutoutDraft?.(null, null);
+      }
       const point = screenToCanvas(event.clientX, event.clientY);
       cutoutDraw = {
         pointerId: event.pointerId,
@@ -763,6 +768,7 @@ export function createGestureController(options: GestureControllerOptions): { de
     if (cutoutDraw !== null && cutoutDraw.pointerId === event.pointerId) {
       cutoutDraw = null;
       options.onCutoutDraft?.(null, null);
+      options.onCancelCutout?.();
       return;
     }
     if (itemGesture !== null && itemGesture.pointerId === event.pointerId) {

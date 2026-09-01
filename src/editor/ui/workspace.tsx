@@ -406,6 +406,7 @@ export function Workspace(props: WorkspaceProps) {
       onCutoutDraft: (rect, shape) =>
         setCutoutDraft(rect === null || shape === null ? null : { rect, shape }),
       onCreateCutout: (rect, shape) => propsRef.current.onCreateCutout(rect, shape),
+      onCancelCutout: () => propsRef.current.onCancelCutout(),
       canvasSize: () => {
         const template = getTemplate(propsRef.current.document.garmentType);
         return { width: template.width, height: template.height };

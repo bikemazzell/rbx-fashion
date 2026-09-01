@@ -389,6 +389,58 @@ test("Escape during an active cutout drag discards it even after pointer-up", as
   expect(undoDisabled(host)).toBe(true);
 }, 10000);
 
+test("pointer cancellation leaves no Cut Out draft or drawing mode active", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await chooseCutoutShape(host, "Oval");
+  const start = canvasToScreen(host, 250, 100);
+  const end = canvasToScreen(host, 340, 180);
+  pointer(host, "pointerdown", 1, start.x, start.y);
+  pointer(host, "pointermove", 1, end.x, end.y);
+  await waitFor(
+    () => overlayEl(host).getAttribute("data-draft-shape") === "ellipse",
+    "ellipse draft",
+  );
+
+  pointer(host, "pointercancel", 1, end.x, end.y);
+
+  await waitFor(
+    () =>
+      host.querySelector(".cutout-instruction") === null &&
+      overlayEl(host).getAttribute("data-has-cutout-draft") === null,
+    "pointer cancel exits drawing mode and clears its draft",
+  );
+  expect(host.querySelector(".cutout-selection-label")).toBeNull();
+  expect(undoDisabled(host)).toBe(true);
+}, 10000);
+
+test("starting a new Cut Out after cancelling a drag discards the stale pointer", async () => {
+  const host = mountApp();
+  await startEditing(host, "Shirt");
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "add sheet");
+  await chooseCutoutShape(host, "Rectangle");
+  const first = canvasToScreen(host, 100, 100);
+  const firstEnd = canvasToScreen(host, 220, 220);
+  pointer(host, "pointerdown", 1, first.x, first.y);
+  pointer(host, "pointermove", 1, firstEnd.x, firstEnd.y);
+  await waitFor(() => overlayEl(host).getAttribute("data-draft-shape") === "rectangle", "rectangle draft");
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await waitFor(() => host.querySelector(".cutout-instruction") === null, "first draw mode cancels");
+
+  (byLabel(host, "Add") as HTMLButtonElement).click();
+  await waitFor(() => host.querySelector('[role="dialog"][aria-label="Add"]') !== null, "second add sheet");
+  await chooseCutoutShape(host, "Oval");
+  const second = canvasToScreen(host, 250, 100);
+  pointer(host, "pointerdown", 2, second.x, second.y);
+  await waitFor(
+    () => overlayEl(host).getAttribute("data-draft-shape") === "ellipse",
+    "new oval draft starts",
+  );
+}, 10000);
+
 test("wheel and keyboard transforms are ignored while drawing a cutout", async () => {
   const host = mountApp();
   await startEditing(host, "T-Shirt");
